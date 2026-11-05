@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>语境多感记忆卡</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="topbar-brand-group">
+        <a class="brand" href="#" id="home-link" aria-label="返回数据页">
+          <span class="brand-mark">M</span>
+          <span>语境多感记忆卡</span>
+        </a>
+        <button class="button button-secondary" id="language-settings-button" type="button">语言设置</button>
+      </div>
+      <div class="topbar-actions">
+        <button class="button button-secondary" id="export-current-button" type="button">导出当前卡片文件</button>
+        <button class="button button-primary" id="add-button" type="button">
+          <span aria-hidden="true">＋</span> 增加卡片
+        </button>
+      </div>
+      <input id="file-input" type="file" accept=".txt,text/plain" hidden multiple>
+    </header>
+
+    <section id="dashboard-view" class="view">
+      <div class="hero">
+        <p class="hero-copy">上传按规则整理的文本，卡片会自动生成并保存在当前设备。不同设备数据不连通，更换设备，请使用“备份数据”和“恢复数据”功能。</p>
+      </div>
+
+      <div class="stats" aria-label="学习数据">
+        <article class="stat-card stat-total">
+          <span class="stat-label">全部卡片</span>
+          <strong id="stat-total">0</strong>
+          <span class="stat-hint">已导入</span>
+        </article>
+        <article class="stat-card stat-learning">
+          <span class="stat-label">待学习</span>
+          <strong id="stat-unknown">0</strong>
+          <span class="stat-hint">状态 unknown</span>
+        </article>
+        <article class="stat-card stat-known">
+          <span class="stat-label">已掌握</span>
+          <strong id="stat-known">0</strong>
+          <span class="stat-hint">学习前可设置</span>
+        </article>
+        <article class="stat-card stat-rate">
+          <span class="stat-label">掌握率</span>
+          <strong id="stat-rate">0%</strong>
+          <span class="stat-hint">持续积累</span>
+        </article>
+      </div>
+
+      <section class="panel decks-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">卡片库</p>
+            <h2>已导入文件</h2>
+          </div>
+          <div class="panel-actions">
+            <button class="button button-secondary" id="backup-button" type="button">备份全部数据</button>
+            <button class="button button-secondary" id="restore-button" type="button">恢复数据</button>
+            <button class="button button-secondary" id="start-all-button" type="button">开始全部学习</button>
+            <input id="restore-file-input" type="file" accept=".json,application/json" hidden>
+          </div>
+        </div>
+        <div id="deck-list" class="deck-list"></div>
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon" aria-hidden="true">{{ }}</div>
+          <h3>还没有卡片</h3>
+          <p>点击右上角“增加卡片”，选择一个 TXT 文件。</p>
+          <button class="button button-primary" id="empty-add-button" type="button">选择文件</button>
+        </div>
+      </section>
+
+      <details class="format-help">
+        <summary>上传模板说明</summary>
+        <div>
+          <p>模板格式：txt文件</p>
+          <p>模板说明：每张卡片用 <code>===</code> 分隔</p>
+          <p>遮挡说明：需要遮挡的内容放在双花括号中。如 <code>{{拼写记忆的内容 / 解释内容}}</code>，第一个“/”前是拼写内容，后面是解释内容（可包含音标）。</p>
+          <pre>There is a {{beautiful /ˈbjuːtɪfl/ 美丽的}} garden.
+===
+This is the next {{card /kɑːd/ 卡片}}.</pre>
+        </div>
+      </details>
+    </section>
+
+    <section id="study-view" class="view" hidden>
+      <div class="study-header">
+        <button class="icon-button" id="back-button" type="button" aria-label="结束学习并返回">←</button>
+        <div class="study-meta">
+          <span id="study-deck-name">全部卡片</span>
+          <strong id="study-progress">0 / 0</strong>
+          <span class="study-timer" id="study-timer" title="连续 2 秒无操作后自动暂停">⏱ 00:00</span>
+        </div>
+        <div class="study-header-actions">
+          <button class="text-button tts-button" id="tts-toggle-button" type="button" aria-pressed="true">⏸ 暂停</button>
+          <button class="text-button edit-button" id="edit-card-button" type="button">编辑</button>
+          <button class="text-button" id="finish-button" type="button">结束</button>
+        </div>
+      </div>
+      <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+      <div class="tts-speed-control">
+        <label for="tts-speed-range">朗读语速</label>
+        <span>0.5×</span>
+        <input id="tts-speed-range" type="range" min="0.5" max="2" step="0.05" value="0.9">
+        <span>2.0×</span>
+        <strong id="tts-speed-value">0.9×</strong>
+      </div>
+
+      <div class="study-stage">
+        <article class="flashcard" id="flashcard" aria-live="polite">
+          <div class="card-status-row">
+            <span class="status-pill" id="card-status">UNKNOWN</span>
+            <span id="remember-streak">连续记住 0 / 3</span>
+          </div>
+          <div id="card-content" class="card-content"></div>
+          <div id="word-details" class="word-details" hidden></div>
+          <p class="reveal-tip" id="reveal-tip">按 ↑ 显示遮挡内容</p>
+        </article>
+      </div>
+
+      <div class="study-controls">
+        <button class="control control-forgot" id="forgot-button" type="button">
+          <span class="key">←</span><span>忘记</span><small>3 张后再出现</small>
+        </button>
+        <div class="mask-controls">
+          <button class="control control-mask" id="reveal-button" type="button">
+            <span class="key">↑</span><span>取消遮挡</span><small>显示答案或单词详情</small>
+          </button>
+          <button class="control control-mask" id="hide-button" type="button">
+            <span class="key">↓</span><span>进行遮挡</span><small>隐藏答案或单词详情</small>
+          </button>
+        </div>
+        <button class="control control-remember" id="remember-button" type="button">
+          <span class="key">→</span><span>记住</span><small>达到设定次数即掌握</small>
+        </button>
+        <button class="control control-undo" id="undo-button" type="button">
+          <span class="key">Tab</span><span>撤回上一次标记</span><small>恢复上一张卡片及学习记录</small>
+        </button>
+      </div>
+    </section>
+
+    <section id="complete-view" class="view complete-view" hidden>
+      <div class="complete-card">
+        <div class="complete-mark">✓</div>
+        <p class="eyebrow">本轮完成</p>
+        <h1>做得好，记忆又前进了一步。</h1>
+        <p id="complete-summary"></p>
+        <div class="complete-actions">
+          <button class="button button-primary" id="continue-button" type="button">继续学习</button>
+          <button class="button button-secondary" id="complete-home-button" type="button">返回数据页</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="study-settings-modal" hidden>
+    <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <button class="dialog-close" id="settings-close-button" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">学习设置</p>
+      <h2 id="settings-title">连续记住多少次后掌握？</h2>
+      <p class="settings-description" id="settings-description">连续第 <strong id="target-count-display">3</strong> 次记住后，卡片状态变为 <code>known</code>，不再出现。</p>
+      <div class="range-row">
+        <span>1</span>
+        <input id="target-count-range" type="range" min="1" max="10" step="1" value="3" aria-label="连续记住次数">
+        <span>10</span>
+      </div>
+      <div class="dialog-actions">
+        <button class="button button-secondary" id="settings-cancel-button" type="button">取消</button>
+        <button class="button button-primary" id="settings-start-button" type="button">开始学习</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="card-editor-modal" hidden>
+    <section class="settings-dialog card-editor-dialog" role="dialog" aria-modal="true" aria-label="编辑卡片">
+      <button class="dialog-close" id="editor-close-button" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">编辑卡片</p>
+      <p class="editor-help">使用 <code>{{英文 /音标/ 中文}}</code> 添加遮挡；删除双花括号即可取消遮挡。</p>
+      <textarea id="card-editor-textarea" rows="12" spellcheck="false" aria-label="当前卡片内容"></textarea>
+      <div class="editor-meta"><span id="editor-cloze-count">0 个遮挡</span><span>保存后立即生效</span></div>
+      <div class="dialog-actions">
+        <button class="button button-secondary" id="editor-cancel-button" type="button">取消</button>
+        <button class="button button-primary" id="editor-save-button" type="button">保存修改</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="combined-settings-modal" hidden>
+    <section class="settings-dialog combined-dialog" role="dialog" aria-modal="true" aria-labelledby="combined-title">
+      <button class="dialog-close" id="combined-close-button" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">组合模式</p>
+      <h2 id="combined-title">设置学习与分组</h2>
+
+      <div class="combined-setting-block">
+        <div class="combined-setting-heading">
+          <label for="combined-target-range">连续记住次数</label>
+          <strong id="combined-target-value">3 次</strong>
+        </div>
+        <p>达到该次数后，句子卡片变为 <code>known</code>。</p>
+        <div class="range-row">
+          <span>1</span>
+          <input id="combined-target-range" type="range" min="1" max="10" step="1" value="3">
+          <span>10</span>
+        </div>
+      </div>
+
+      <div class="combined-setting-block">
+        <div class="combined-setting-heading">
+          <label for="combined-group-range">每组句子卡片数</label>
+          <strong id="combined-group-value">1 张</strong>
+        </div>
+        <p id="combined-group-hint">范围 1 到当前词库总卡片数。</p>
+        <div class="range-row">
+          <span>1</span>
+          <input id="combined-group-range" type="range" min="1" max="1" step="1" value="1">
+          <span id="combined-group-max">1</span>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="button button-secondary" id="combined-cancel-button" type="button">取消</button>
+        <button class="button button-primary" id="combined-start-button" type="button">开始组合学习</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="easy-words-modal" hidden>
+    <section class="settings-dialog easy-words-dialog" role="dialog" aria-modal="true" aria-labelledby="easy-words-title">
+      <button class="dialog-close" id="easy-words-close-button" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow">易忘词</p>
+      <h2 id="easy-words-title">按遗忘次数复习</h2>
+      <p class="easy-words-description" id="easy-words-description">单词按累计遗忘次数从高到低排列。</p>
+      <div class="easy-words-table" role="table" aria-label="易忘词列表">
+        <div class="easy-words-head" role="row"><span role="columnheader">单词/词组</span><span role="columnheader">遗忘次数</span></div>
+        <div class="easy-words-list" id="easy-words-list"></div>
+      </div>
+      <div class="dialog-actions">
+        <button class="button button-secondary" id="easy-words-cancel-button" type="button">取消</button>
+        <button class="button button-primary" id="easy-words-start-button" type="button">开始</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="deck-export-modal" hidden>
+    <section class="deck-export-dialog" role="dialog" aria-modal="true" aria-labelledby="deck-export-title">
+      <header class="deck-export-header">
+        <h2 id="deck-export-title">导出当前卡片文件</h2>
+        <button class="dialog-close" id="deck-export-close-button" type="button" aria-label="关闭">×</button>
+      </header>
+      <label class="deck-export-select-all">
+        <input id="deck-export-select-all" type="checkbox">
+        <span>全选</span>
+      </label>
+      <div class="deck-export-list" id="deck-export-list" aria-label="可导出的卡片组"></div>
+      <footer class="deck-export-footer">
+        <button class="button button-secondary" id="deck-export-cancel-button" type="button">取消</button>
+        <button class="button button-primary" id="deck-export-confirm-button" type="button" disabled>确认导出</button>
+      </footer>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="language-modal" hidden>
+    <section class="settings-dialog language-dialog" role="dialog" aria-modal="true" aria-labelledby="language-title">
+      <button class="dialog-close" id="language-close-button" type="button" aria-label="关闭">×</button>
+      <p class="eyebrow" id="language-eyebrow">语言</p>
+      <h2 id="language-title">语言设置</h2>
+      <p class="settings-description" id="language-description">选择网页界面语言。</p>
+      <div class="language-options">
+        <button class="button button-secondary" id="language-zh-button" type="button">中文</button>
+        <button class="button button-secondary" id="language-en-button" type="button">English</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="bundled-backup.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
