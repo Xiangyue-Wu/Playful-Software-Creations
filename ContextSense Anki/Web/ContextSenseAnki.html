@@ -151,6 +151,13 @@ This is the next {{card /kɑːd/ 卡片}}.</pre>
         <p class="eyebrow">本轮完成</p>
         <h1>做得好，记忆又前进了一步。</h1>
         <p id="complete-summary"></p>
+        <section id="fast-review-summary" class="fast-review-summary" hidden>
+          <h2 id="fast-review-summary-title">本轮易忘词</h2>
+          <div class="easy-words-table" role="table" aria-label="本轮易忘词列表">
+            <div class="easy-words-head" role="row"><span role="columnheader">单词/词组</span><span role="columnheader">遗忘次数</span></div>
+            <div class="easy-words-list" id="fast-review-summary-list"></div>
+          </div>
+        </section>
         <div class="complete-actions">
           <button class="button button-primary" id="continue-button" type="button">继续学习</button>
           <button class="button button-secondary" id="complete-home-button" type="button">返回数据页</button>
@@ -232,7 +239,10 @@ This is the next {{card /kɑːd/ 卡片}}.</pre>
 
   <div class="modal-backdrop" id="easy-words-modal" hidden>
     <section class="settings-dialog easy-words-dialog" role="dialog" aria-modal="true" aria-labelledby="easy-words-title">
-      <button class="dialog-close" id="easy-words-close-button" type="button" aria-label="关闭">×</button>
+      <div class="easy-words-header-actions">
+        <button class="button button-secondary" id="easy-words-fast-button" type="button">速刷模式</button>
+        <button class="dialog-close" id="easy-words-close-button" type="button" aria-label="关闭">×</button>
+      </div>
       <p class="eyebrow">易忘词</p>
       <h2 id="easy-words-title">按遗忘次数复习</h2>
       <p class="easy-words-description" id="easy-words-description">单词按累计遗忘次数从高到低排列。</p>
@@ -242,7 +252,7 @@ This is the next {{card /kɑːd/ 卡片}}.</pre>
       </div>
       <div class="dialog-actions">
         <button class="button button-secondary" id="easy-words-cancel-button" type="button">取消</button>
-        <button class="button button-primary" id="easy-words-start-button" type="button">开始</button>
+        <button class="button button-primary" id="easy-words-start-button" type="button">开始组合模式</button>
       </div>
     </section>
   </div>

@@ -3,7 +3,7 @@
 [TOC]
 
 **当前项目仅实测过 Win11 网页版、Android 10。**  
-**如有问题，欢迎通过 [Issue](../../issues) 进行反馈。有空时会解决。**
+**如有问题，欢迎通过 [Issue](https://github.com/Xiangyue-Wu/Playful-Software-Creations/issues/new) 进行反馈。有空时会解决。**
 
 ## 1. 项目简介
 
@@ -21,7 +21,11 @@
 
 ### 2.1 网页版
 
-下载 [ContextSenseAnki-Web.zip](./Web/ContextSenseAnki-Web.zip)，解压后打开其中的 `ContextSenseAnki.html` 即可使用。
+下载 [最新版 ContextSenseAnki-Web.zip](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases/latest/download/ContextSenseAnki-Web.zip)，解压后打开其中的 `ContextSenseAnki.html` 即可使用。
+
+旧版本保存在[历史发布](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases)中。更新时请在原文件夹替换网页文件，并继续使用相同浏览器及原来的 HTML 入口文件名，以保留原有浏览器数据位置。
+
+本次网页版更新：新增易忘词速刷模式，修复网页版数据存储 bug。
 
 网页数据保存在当前浏览器中；更换浏览器或设备时，请使用应用内的“备份数据”和“恢复数据”功能迁移学习进度。
 
@@ -29,8 +33,8 @@
 
 ### 2.2 安卓版
 
-- Android 10：[下载 ContextSense Anki Android 10 APK](./Android/ContextSenseAnki-Android10.apk)
-- Android 11：[下载 ContextSense Anki Android 11 APK](./Android/ContextSenseAnki-Android11.apk)
+- Android 10：[下载 ContextSense Anki Android 10 APK](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases/latest/download/ContextSenseAnki-Android10.apk)
+- Android 11：[下载 ContextSense Anki Android 11 APK](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases/latest/download/ContextSenseAnki-Android11.apk)
 
 下载对应版本的 APK 后，在安卓设备上安装即可。安卓版源码与内置数据位于 [`Android/ContextSenseAnki-Android-Project/`](./Android/ContextSenseAnki-Android-Project/)。
 
@@ -55,6 +59,8 @@
 #### 5.速刷模式
 
 熟词复习和易忘词复习都属于速刷模式：一次标记记住即可完成当前单词，适合快速大量重复，加深记忆。
+
+易忘词弹窗右上角新增“速刷模式”，与“开始组合模式”共享复习进度。第一次左键显示详情，再次左键记住；右键遗忘并累计遗忘次数。每轮每词只出现一次，结束显示记住/遗忘统计及最新易忘词列表；Tab 可撤销标记。
 
 ## 4. 卡片模板说明与制作
 

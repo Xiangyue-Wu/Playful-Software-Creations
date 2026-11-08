@@ -3,7 +3,7 @@
 [TOC]
 
 **This project has only been tested on the Windows 11 web version and Android 10.**  
-**If you encounter any problems, please submit feedback through an [Issue](../../issues). I will address it when I have time.**
+**If you encounter any problems, please submit feedback through an [Issue](https://github.com/Xiangyue-Wu/Playful-Software-Creations/issues/new). I will address it when I have time.**
 
 ## 1. Project overview
 
@@ -21,7 +21,11 @@ The **web version** uses browser TTS (Chrome is recommended). The **Android vers
 
 ### 2.1 Web version
 
-Download [ContextSenseAnki-Web.zip](./Web/ContextSenseAnki-Web.zip), extract it, and open `ContextSenseAnki.html`.
+Download the [latest ContextSenseAnki-Web.zip](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases/latest/download/ContextSenseAnki-Web.zip), extract it, and open `ContextSenseAnki.html`.
+
+Previous versions remain available in [Releases](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases). When updating, replace the web files in their original folder and continue using the same browser and HTML entry filename to retain the existing browser data location.
+
+Web update: Added quick review mode for difficult words and fixed a data persistence bug in the web version.
 
 Web data is saved in the current browser. If you change browsers or devices, use the in-app “Backup data” and “Restore data” functions to transfer your learning progress.
 
@@ -29,8 +33,8 @@ The web files are located in the [`Web/`](./Web/) directory. Built-in card data 
 
 ### 2.2 Android version
 
-- Android 10: [Download ContextSense Anki Android 10 APK](./Android/ContextSenseAnki-Android10.apk)
-- Android 11: [Download ContextSense Anki Android 11 APK](./Android/ContextSenseAnki-Android11.apk)
+- Android 10: [Download ContextSense Anki Android 10 APK](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases/latest/download/ContextSenseAnki-Android10.apk)
+- Android 11: [Download ContextSense Anki Android 11 APK](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases/latest/download/ContextSenseAnki-Android11.apk)
 
 Download the APK for the corresponding Android version and install it on your device. The Android source code and built-in data are located in [`Android/ContextSenseAnki-Android-Project/`](./Android/ContextSenseAnki-Android-Project/).
 
@@ -55,6 +59,8 @@ Masked words and phrases are extracted from sentence cards marked as `known` and
 #### 5. Rapid-review mode
 
 Review known words and forgettable words are both rapid-review modes: one “remember” action completes the current word, making it suitable for quickly repeating many items and strengthening memory.
+
+The new “Quick review” button in the difficult-word dialog shares progress with combination mode. Press Left to reveal details, Left again to remember, or Right to forget and increment the forget count. Each word appears once per round, followed by remember/forget totals and the updated difficult-word list. Tab undoes the last mark.
 
 ## 4. Card template instructions and creation
 

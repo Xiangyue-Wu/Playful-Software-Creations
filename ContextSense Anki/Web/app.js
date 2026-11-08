@@ -1,4 +1,4 @@
-(function () {
+(async function () {
   "use strict";
 
   const STORAGE_KEY = "memorize-anki-v1";
@@ -6,12 +6,14 @@
   const DEFAULT_KNOWN_TARGET = 3;
   const DEFAULT_TTS_RATE = 0.9;
   const STUDY_IDLE_DELAY = 2000;
-  const state = loadState();
+  let persistentDbPromise = null;
+  const state = await loadState();
   ensureLearningTarget();
   ensureTtsSetting();
   ensureWordForgetCounts();
   ensureWordCardPositions();
   ensureLanguageSetting();
+  saveState();
   let session = null;
   let pendingDeckId = null;
   let pendingCombinedDeckId = null;
@@ -46,7 +48,7 @@
       allCards: "全部卡片", imported: "已导入", learning: "待学习", unknownStatus: "状态 unknown", known: "已掌握", studyBefore: "学习前可设置", mastery: "掌握率", accumulating: "持续积累", cardLibrary: "卡片库", importedFiles: "已导入文件", backupAll: "备份全部数据", restore: "恢复数据", startAll: "开始全部学习", noCards: "还没有卡片", chooseFile: "选择文件", emptyHint: "点击右上角“增加卡片”，选择一个 TXT 文件。",
       templateSummary: "上传模板说明", templateFormat: "模板格式：txt文件", templateRule: "模板说明：每张卡片用 <code>===</code> 分隔", maskRule: "遮挡说明：需要遮挡的内容放在双花括号中。如 <code>{{拼写记忆的内容 / 解释内容}}</code>，第一个“/”前是拼写内容，后面是解释内容（可包含音标）。",
       studyBack: "结束学习并返回", pause: "⏸ 暂停", play: "▶ 播放", unsupportedSpeech: "不支持朗读", edit: "编辑", finish: "结束", speed: "朗读语速", reveal: "取消遮挡", hide: "进行遮挡", revealHint: "显示答案或单词详情", hideHint: "隐藏答案或单词详情", forgot: "忘记", remember: "记住", undo: "撤回上一次标记", undoHint: "恢复上一张卡片及学习记录", forgotHint: "3 张后再出现", rememberHint: "达到设定次数即掌握", complete: "本轮完成", completeTitle: "做得好，记忆又前进了一步。", continue: "继续学习", homeButton: "返回数据页",
-      learningSettings: "学习设置", targetQuestion: "连续记住多少次后掌握？", targetDescription: "连续第 {n} 次记住后，卡片状态变为 <code>known</code>，不再出现。", cancel: "取消", startLearning: "开始学习", editor: "编辑卡片", editorHelp: "使用 <code>{{英文 /音标/ 中文}}</code> 添加遮挡；删除双花括号即可取消遮挡。", editorCount: "{n} 个遮挡", savedImmediately: "保存后立即生效", save: "保存修改", combined: "组合模式", combinedTitle: "设置学习与分组", combinedTarget: "连续记住次数", combinedTargetHint: "达到该次数后，句子卡片变为 <code>known</code>。", combinedGroup: "每组句子卡片数", combinedRange: "范围 1 到当前词库总卡片数。", startCombined: "开始组合学习", easy: "易忘词", easyTitle: "按遗忘次数复习", easyDescription: "单词按累计遗忘次数从高到低排列。", word: "单词/词组", forgetCount: "遗忘次数", start: "开始", resume: "继续", exportTitle: "导出当前卡片文件", selectAll: "全选", confirmExport: "确认导出", cards: "张", pending: "张待学习", delete: "删除", reset: "重置", exportWords: "导出生词", learn: "学习", continueLearn: "继续", review: "复习熟词", continueReview: "继续熟词", groupMode: "组合模式", noExport: "当前没有可导出的卡片文件", selectOne: "请至少选择一组卡片", groupExported: "已打包导出 {n} 组卡片",
+      learningSettings: "学习设置", targetQuestion: "连续记住多少次后掌握？", targetDescription: "连续第 {n} 次记住后，卡片状态变为 <code>known</code>，不再出现。", cancel: "取消", startLearning: "开始学习", editor: "编辑卡片", editorHelp: "使用 <code>{{英文 /音标/ 中文}}</code> 添加遮挡；删除双花括号即可取消遮挡。", editorCount: "{n} 个遮挡", savedImmediately: "保存后立即生效", save: "保存修改", combined: "组合模式", combinedTitle: "设置学习与分组", combinedTarget: "连续记住次数", combinedTargetHint: "达到该次数后，句子卡片变为 <code>known</code>。", combinedGroup: "每组句子卡片数", combinedRange: "范围 1 到当前词库总卡片数。", startCombined: "开始组合学习", easy: "易忘词", easyTitle: "按遗忘次数复习", easyDescription: "单词按累计遗忘次数从高到低排列。", word: "单词/词组", forgetCount: "遗忘次数", start: "开始", resume: "继续", easyComboStart: "开始组合模式", easyComboResume: "继续组合模式", easyFastStart: "速刷模式", easyFastResume: "继续速刷", fastSummaryTitle: "本轮易忘词", fastRemembered: "本轮记住 {n} 个，遗忘 {m} 个", exportTitle: "导出当前卡片文件", selectAll: "全选", confirmExport: "确认导出", cards: "张", pending: "张待学习", delete: "删除", reset: "重置", exportWords: "导出生词", learn: "学习", continueLearn: "继续", review: "复习熟词", continueReview: "继续熟词", groupMode: "组合模式", noExport: "当前没有可导出的卡片文件", selectOne: "请至少选择一组卡片", groupExported: "已打包导出 {n} 组卡片",
     },
     en: {
       languageSettings: "Language", language: "Language", chooseLanguage: "Choose the web interface language.", chinese: "中文", english: "English", close: "Close",
@@ -55,7 +57,7 @@
       allCards: "All cards", imported: "Imported", learning: "To learn", unknownStatus: "Status: unknown", known: "Known", studyBefore: "Set before studying", mastery: "Mastery", accumulating: "Keep building", cardLibrary: "Card library", importedFiles: "Imported files", backupAll: "Back up all data", restore: "Restore data", startAll: "Study all", noCards: "No cards yet", chooseFile: "Choose file", emptyHint: "Click “Add cards” above and choose a TXT file.",
       templateSummary: "Upload template", templateFormat: "Template format: TXT file", templateRule: "Template rule: separate cards with <code>===</code>", maskRule: "Masking: put content to hide inside double braces. For example, <code>{{word to spell / explanation}}</code>; the text before the first “/” is the spelling answer, and the rest is its explanation (which may include phonetics).",
       studyBack: "End study and return", pause: "⏸ Pause", play: "▶ Play", unsupportedSpeech: "Speech unsupported", edit: "Edit", finish: "Finish", speed: "Speech rate", reveal: "Reveal", hide: "Mask", revealHint: "Show answer or word details", hideHint: "Hide answer or word details", forgot: "Forgot", remember: "Remember", undo: "Undo last mark", undoHint: "Restore the previous card and study record", forgotHint: "Show again after 3 cards", rememberHint: "Master after the set count", complete: "Round complete", completeTitle: "Great work—your memory moved forward.", continue: "Continue studying", homeButton: "Return to dashboard",
-      learningSettings: "Study settings", targetQuestion: "How many consecutive remembers to master?", targetDescription: "After the {n}th consecutive remember, the card becomes <code>known</code> and leaves the queue.", cancel: "Cancel", startLearning: "Start studying", editor: "Edit card", editorHelp: "Use <code>{{English /phonetic/ Chinese}}</code> to add a mask; remove the braces to remove a mask.", editorCount: "{n} masks", savedImmediately: "Effective immediately after saving", save: "Save changes", combined: "Combined mode", combinedTitle: "Study and group settings", combinedTarget: "Consecutive remembers", combinedTargetHint: "Cards become <code>known</code> after this count.", combinedGroup: "Cards per group", combinedRange: "From 1 to the total cards in this deck.", startCombined: "Start combined study", easy: "Difficult words", easyTitle: "Review by forget count", easyDescription: "Words are ordered by cumulative forget count, highest first.", word: "Word/phrase", forgetCount: "Forget count", start: "Start", resume: "Resume", exportTitle: "Export card files", selectAll: "Select all", confirmExport: "Export selected", cards: "cards", pending: "to learn", delete: "Delete", reset: "Reset", exportWords: "Export words", learn: "Study", continueLearn: "Continue", review: "Review known", continueReview: "Continue review", groupMode: "Combined mode", noExport: "No card files to export", selectOne: "Select at least one card set", groupExported: "Exported {n} card sets",
+      learningSettings: "Study settings", targetQuestion: "How many consecutive remembers to master?", targetDescription: "After the {n}th consecutive remember, the card becomes <code>known</code> and leaves the queue.", cancel: "Cancel", startLearning: "Start studying", editor: "Edit card", editorHelp: "Use <code>{{English /phonetic/ Chinese}}</code> to add a mask; remove the braces to remove a mask.", editorCount: "{n} masks", savedImmediately: "Effective immediately after saving", save: "Save changes", combined: "Combined mode", combinedTitle: "Study and group settings", combinedTarget: "Consecutive remembers", combinedTargetHint: "Cards become <code>known</code> after this count.", combinedGroup: "Cards per group", combinedRange: "From 1 to the total cards in this deck.", startCombined: "Start combined study", easy: "Difficult words", easyTitle: "Review by forget count", easyDescription: "Words are ordered by cumulative forget count, highest first.", word: "Word/phrase", forgetCount: "Forget count", start: "Start", resume: "Resume", easyComboStart: "Start combined mode", easyComboResume: "Continue combined mode", easyFastStart: "Quick review", easyFastResume: "Continue quick review", fastSummaryTitle: "Difficult words this round", fastRemembered: "Remembered {n}, forgot {m} this round", exportTitle: "Export card files", selectAll: "Select all", confirmExport: "Export selected", cards: "cards", pending: "to learn", delete: "Delete", reset: "Reset", exportWords: "Export words", learn: "Study", continueLearn: "Continue", review: "Review known", continueReview: "Continue review", groupMode: "Combined mode", noExport: "No card files to export", selectOne: "Select at least one card set", groupExported: "Exported {n} card sets",
     },
   };
 
@@ -80,7 +82,7 @@
   function applyLanguage(shouldRender = true) {
     const english = state.language === "en";
     document.documentElement.lang = english ? "en" : "zh-CN";
-    document.title = english ? "ContextSense Anki" : "语境多感记忆卡";
+    document.title = tr("brand");
     $("language-settings-button").textContent = tr("language");
     $("language-eyebrow").textContent = tr("language");
     $("language-title").textContent = tr("languageSettings");
@@ -146,15 +148,16 @@
     $("combined-group-hint").textContent = tr("combinedRange");
     $("combined-start-button").textContent = tr("startCombined");
     $("combined-cancel-button").textContent = tr("cancel");
-    $("easy-words-close-button").parentElement.querySelector(".eyebrow").textContent = tr("easy");
+    $("easy-words-modal").querySelector(".eyebrow").textContent = tr("easy");
     $("easy-words-title").textContent = tr("easyTitle");
-    const easyHeaders = $("easy-words-modal").querySelectorAll(".easy-words-head span");
-    easyHeaders[0].textContent = tr("word");
-    easyHeaders[1].textContent = tr("forgetCount");
-    $("easy-words-start-button").textContent = tr("start");
+    const easyHeaders = document.querySelectorAll("#easy-words-modal .easy-words-head span, #fast-review-summary .easy-words-head span");
+    easyHeaders.forEach((header, index) => { header.textContent = tr(index % 2 === 0 ? "word" : "forgetCount"); });
+    $("easy-words-start-button").textContent = tr("easyComboStart");
+    $("easy-words-fast-button").textContent = tr("easyFastStart");
+    $("fast-review-summary-title").textContent = tr("fastSummaryTitle");
     $("easy-words-cancel-button").textContent = tr("cancel");
     $("deck-export-title").textContent = tr("exportTitle");
-    $("deck-export-select-all").querySelector("span").textContent = tr("selectAll");
+    $("deck-export-select-all").closest("label").querySelector("span").textContent = tr("selectAll");
     $("deck-export-cancel-button").textContent = tr("cancel");
     $("deck-export-confirm-button").textContent = tr("confirmExport");
     updateTtsButton();
@@ -165,21 +168,95 @@
     }
   }
 
-  function loadState() {
+  function readStoredState(key) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(key));
+      if (!saved || !Array.isArray(saved.decks) || !Array.isArray(saved.cards)) return null;
+      if (!saved.activeSessions || typeof saved.activeSessions !== "object" || Array.isArray(saved.activeSessions)) {
+        saved.activeSessions = {};
+      }
+      return saved;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function openPersistentDb() {
+    if (!window.indexedDB) return Promise.resolve(null);
+    if (!persistentDbPromise) {
+      persistentDbPromise = new Promise((resolve) => {
+        try {
+          const request = indexedDB.open("contextsense-anki", 1);
+          request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains("state")) db.createObjectStore("state");
+          };
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = request.onblocked = () => resolve(null);
+        } catch (_) { resolve(null); }
+      });
+    }
+    return persistentDbPromise;
+  }
+
+  async function readPersistentState() {
+    const db = await openPersistentDb();
+    if (!db) return null;
+    return new Promise((resolve) => {
+      try {
+        const request = db.transaction("state", "readonly").objectStore("state").get(STORAGE_KEY);
+        request.onsuccess = () => {
+          const record = request.result;
+          resolve(record && record.value && Array.isArray(record.value.decks) && Array.isArray(record.value.cards) ? record : null);
+        };
+        request.onerror = () => resolve(null);
+      } catch (_) { resolve(null); }
+    });
+  }
+
+  async function writePersistentState(value) {
+    const db = await openPersistentDb();
+    if (!db) return false;
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction("state", "readwrite");
+        transaction.objectStore("state").put({ savedAt: Date.now(), value }, STORAGE_KEY);
+        transaction.oncomplete = () => resolve(true);
+        transaction.onerror = transaction.onabort = () => resolve(false);
+      } catch (_) { resolve(false); }
+    });
+  }
+
+  async function loadState() {
+    const persistent = await readPersistentState();
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (saved && Array.isArray(saved.decks) && Array.isArray(saved.cards)) {
         if (!saved.activeSessions || typeof saved.activeSessions !== "object") saved.activeSessions = {};
         const hasSavedData = saved.decks.length > 0 || saved.cards.length > 0;
-        const seedAlreadyHandled = localStorage.getItem(BUNDLED_SEED_KEY) === "done";
+        let seedAlreadyHandled = false;
+        try { seedAlreadyHandled = localStorage.getItem(BUNDLED_SEED_KEY) === "done"; } catch (_) {}
         if (hasSavedData || !window.BUNDLED_BACKUP || seedAlreadyHandled) {
+          const localTime = Math.max(Number(saved.__savedAt) || 0, ...Object.values(saved.activeSessions).map((item) => Number(item && item.savedAt) || 0));
+          if (persistent && persistent.savedAt > localTime && (persistent.value.decks.length || persistent.value.cards.length)) {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(persistent.value)); } catch (_) {}
+            return persistent.value;
+          }
           if (hasSavedData && window.BUNDLED_BACKUP && !seedAlreadyHandled) {
-            localStorage.setItem(BUNDLED_SEED_KEY, "done");
+            try { localStorage.setItem(BUNDLED_SEED_KEY, "done"); } catch (_) {}
           }
           return saved;
         }
       }
     } catch (_) {}
+
+    if (persistent && (persistent.value.decks.length || persistent.value.cards.length)) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(persistent.value));
+        localStorage.setItem(BUNDLED_SEED_KEY, "done");
+      } catch (_) {}
+      return persistent.value;
+    }
 
     try {
       const bundled = window.BUNDLED_BACKUP;
@@ -189,7 +266,7 @@
         }
         const restored = validateBackup(bundled.data || bundled);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
-        localStorage.setItem(BUNDLED_SEED_KEY, "done");
+        try { localStorage.setItem(BUNDLED_SEED_KEY, "done"); } catch (_) {}
         return restored;
       }
     } catch (error) {
@@ -199,7 +276,13 @@
   }
 
   function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    state.__savedAt = Date.now();
+    const serialized = JSON.stringify(state);
+    try { localStorage.setItem(STORAGE_KEY, serialized); }
+    catch (error) { console.error("主学习数据保存失败", error); }
+    writePersistentState(JSON.parse(serialized)).then((saved) => {
+      if (!saved) console.warn("IndexedDB 学习数据副本写入失败");
+    });
   }
 
   function ensureLearningTarget() {
@@ -1365,7 +1448,8 @@
     $("easy-words-description").textContent = state.language === "en"
       ? `${deck.name} · ${items.length} words/phrases, ordered by forget count.`
       : `${deck.name} · 共 ${items.length} 个单词/词组，按累计遗忘次数从高到低排列。`;
-    $("easy-words-start-button").textContent = canResume ? tr("resume") : tr("start");
+    $("easy-words-start-button").textContent = canResume ? tr("easyComboResume") : tr("easyComboStart");
+    $("easy-words-fast-button").textContent = canResume ? tr("easyFastResume") : tr("easyFastStart");
     $("easy-words-modal").hidden = false;
     $("easy-words-start-button").focus();
   }
@@ -1379,10 +1463,17 @@
     const deckId = pendingEasyDeckId;
     $("easy-words-modal").hidden = true;
     pendingEasyDeckId = null;
-    startEasyReview(deckId);
+    startEasyReview(deckId, false);
   }
 
-  function startEasyReview(deckId) {
+  function confirmEasyWordsFast() {
+    const deckId = pendingEasyDeckId;
+    $("easy-words-modal").hidden = true;
+    pendingEasyDeckId = null;
+    startEasyReview(deckId, true);
+  }
+
+  function startEasyReview(deckId, fastMode = false) {
     const deck = state.decks.find((item) => item.id === deckId);
     if (!deck) return;
     const saved = state.activeSessions[sessionKey(deckId, "easyReview")];
@@ -1390,8 +1481,19 @@
     const savedQueue = saved && Number(saved.logicVersion) >= 3 && Array.isArray(saved.queue)
       ? saved.queue.filter((item) => item && (item.type === "word" || item.type === "sentence") && sourceCardIds.has(item.sourceCardId))
       : [];
-    const isResuming = savedQueue.length > 0;
-    const queue = isResuming ? savedQueue : easyWordItems(deckId);
+    const fastQueue = fastMode ? savedQueue.reduce((items, item) => {
+      const wordItem = item.type === "word"
+        ? { ...item, detailsRevealed: saved.fastMode === true && Boolean(item.detailsRevealed) }
+        : reviewWordItem(item);
+      const key = wordItem.key || normalizedSpelling(wordItem.word);
+      if (!key || items.some((candidate) => candidate.key === key)) return items;
+      wordItem.key = key;
+      items.push(wordItem);
+      return items;
+    }, []) : savedQueue;
+    const resumeQueue = fastMode ? fastQueue : savedQueue;
+    const isResuming = resumeQueue.length > 0;
+    const queue = isResuming ? resumeQueue : easyWordItems(deckId);
     if (!queue.length) {
       toast("当前词库没有可复习的易忘词");
       return;
@@ -1400,7 +1502,7 @@
       ...saved,
       mode: "easyReview",
       deckId,
-      deckName: `${deck.name} · 易忘词`,
+      deckName: `${deck.name} · ${fastMode ? "速刷" : "易忘词"}`,
       queue,
       completed: Math.max(0, Number(saved.completed) || 0),
       remembered: Math.max(0, Number(saved.remembered) || 0),
@@ -1410,10 +1512,11 @@
       history: [],
       activeStudyMs: Math.max(0, Number(saved.activeStudyMs) || 0),
       knownTarget: 1,
+      fastMode,
     } : {
       mode: "easyReview",
       deckId,
-      deckName: `${deck.name} · 易忘词`,
+      deckName: `${deck.name} · ${fastMode ? "速刷" : "易忘词"}`,
       queue,
       initialCount: queue.length,
       completed: 0,
@@ -1425,6 +1528,7 @@
       currentDraft: null,
       activeStudyMs: 0,
       knownTarget: 1,
+      fastMode,
     };
     persistSession();
     $("study-deck-name").textContent = session.deckName;
@@ -1432,7 +1536,9 @@
     startStudyTimer();
     lastRenderedReviewType = null;
     renderCard();
-    toast(isResuming ? "已从上次中断的位置继续易忘词复习" : `已按遗忘次数排列 ${queue.length} 张易忘词卡`);
+    toast(isResuming
+      ? (fastMode ? "已从上次中断的位置继续速刷" : "已从上次中断的位置继续易忘词复习")
+      : (fastMode ? `已按遗忘次数排列 ${queue.length} 个单词，进入速刷` : `已按遗忘次数排列 ${queue.length} 张易忘词卡`));
   }
 
   function openCombinedSettings(deckId) {
@@ -1765,7 +1871,8 @@
       currentDraft: session.currentDraft,
       activeStudyMs: Math.max(0, Number(session.activeStudyMs) || 0),
       knownTarget: session.knownTarget,
-      logicVersion: 3,
+      fastMode: session.mode === "easyReview" && Boolean(session.fastMode),
+      logicVersion: 4,
       savedAt: Date.now(),
       ...(session.mode === "combined" ? {
         phase: session.phase,
@@ -1799,6 +1906,10 @@
     return Boolean(isTermReviewPhase() && session.queue[0] && session.queue[0].type === "word");
   }
 
+  function isEasyFastReview() {
+    return Boolean(session && session.mode === "easyReview" && session.fastMode);
+  }
+
   function reviewWordDetails(fullAnswer) {
     const slashIndex = String(fullAnswer || "").indexOf("/");
     return slashIndex >= 0
@@ -1819,7 +1930,9 @@
     if (reviewItem && reviewItem.type === "word") {
       const detailsShown = Boolean(reviewItem.detailsRevealed);
       setDecisionControl(left, detailsShown ? tr("remember") : (state.language === "en" ? "View details" : "查看详情"), detailsShown ? (state.language === "en" ? "Leaves this round" : "本轮不再出现") : (state.language === "en" ? "Press ← again to remember" : "再次按 ← 即记住"), true);
-      setDecisionControl(right, tr("forgot"), state.language === "en" ? "Open the source sentence" : "立即用原句复习", false);
+      setDecisionControl(right, tr("forgot"), isEasyFastReview()
+        ? (state.language === "en" ? "Leaves this round" : "本轮不再出现")
+        : (state.language === "en" ? "Open the source sentence" : "立即用原句复习"), false);
       return;
     }
     setDecisionControl(left, tr("forgot"), reviewItem ? (state.language === "en" ? "Show the source sentence after 3 words" : "3 个词后再显示原句") : tr("forgotHint"), false);
@@ -1965,10 +2078,12 @@
     if (reviewItem) {
       const isWord = reviewItem.type === "word";
       $("card-status").textContent = isWord
-        ? (session.mode === "easyReview" ? tr("easy") : tr("review"))
+        ? (isEasyFastReview() ? tr("easyFastStart") : (session.mode === "easyReview" ? tr("easy") : tr("review")))
         : (state.language === "en" ? "Source sentence" : "原句强化");
       $("remember-streak").textContent = isWord
-        ? (state.language === "en" ? "View details, then confirm" : "先查看详情，再确认记住")
+        ? (isEasyFastReview()
+          ? (state.language === "en" ? "← Details, then remember　→ Forget" : "← 先看详情，再按左键记住　→ 忘记")
+          : (state.language === "en" ? "View details, then confirm" : "先查看详情，再确认记住"))
         : (state.language === "en" ? `Masking: ${reviewItem.word}` : `只遮挡：${reviewItem.word}`);
       if (isWord && reviewItem.detailsRevealed) {
         wordDetails.textContent = reviewWordDetails(reviewItem.fullAnswer);
@@ -1976,7 +2091,9 @@
         $("reveal-tip").textContent = state.language === "en" ? "Details shown: press ← to remember; press → to forget" : "已显示详情：再按 ← 标记记住；按 → 标记忘记";
       } else {
         $("reveal-tip").textContent = isWord
-          ? (state.language === "en" ? "← View details (press again to remember)　　→ Forget and open source" : "← 查看详情（再按一次即记住）　　→ 忘记并查看原句")
+          ? (isEasyFastReview()
+            ? (state.language === "en" ? "← View details (press again to remember)　　→ Forget" : "← 查看详情（再按一次即记住）　　→ 忘记")
+            : (state.language === "en" ? "← View details (press again to remember)　　→ Forget and open source" : "← 查看详情（再按一次即记住）　　→ 忘记并查看原句"))
           : (state.language === "en" ? "Spell correctly or press →; test again after 3 words" : "拼写正确或按 → 后，间隔 3 个词再次测试");
       }
       configureDecisionControls(reviewItem);
@@ -2004,10 +2121,11 @@
       $("study-progress").textContent = state.language === "en" ? `Sentences ${completedSentences} / ${session.totalSentenceCount}` : `句子 ${completedSentences} / ${session.totalSentenceCount}`;
       $("progress-bar").style.width = `${Math.min(100, completedSentences / session.totalSentenceCount * 100)}%`;
     } else {
+      const fastProcessed = isEasyFastReview() ? session.completed + session.forgotten : session.completed;
       $("study-progress").textContent = state.language === "en"
-        ? `${reviewItem ? "Remembered" : "Mastered"} ${Math.min(session.completed, session.initialCount)} / ${session.initialCount}`
-        : `${reviewItem ? "已记住" : "已掌握"} ${Math.min(session.completed, session.initialCount)} / ${session.initialCount}`;
-      $("progress-bar").style.width = `${Math.min(100, session.completed / session.initialCount * 100)}%`;
+        ? `${reviewItem && isEasyFastReview() ? "Processed" : (reviewItem ? "Remembered" : "Mastered")} ${Math.min(fastProcessed, session.initialCount)} / ${session.initialCount}`
+        : `${reviewItem && isEasyFastReview() ? "已处理" : (reviewItem ? "已记住" : "已掌握")} ${Math.min(fastProcessed, session.initialCount)} / ${session.initialCount}`;
+      $("progress-bar").style.width = `${Math.min(100, fastProcessed / session.initialCount * 100)}%`;
     }
     persistSession();
     if (clozeIndex > 0 && !content.querySelector(".cloze:not(.solved)")) scheduleAutoRemember();
@@ -2451,10 +2569,10 @@
     session.queue.shift();
     session.forgotten += 1;
     session.currentDraft = null;
-    if (item.type === "word") {
+    if (item.type === "word" && !(session.mode === "easyReview" && session.fastMode)) {
       // 单词忘记后，原句紧接着出现。
       session.queue.unshift(reviewSentenceItem(item));
-    } else {
+    } else if (item.type !== "word") {
       // 原句仍忘记时，经过三个其他词后再次强化原句。
       insertAfterThreeWords(reviewSentenceItem(item));
     }
@@ -2583,15 +2701,19 @@
     stopCardSpeech();
     delete state.activeSessions[sessionKey(session.deckId, session.mode)];
     saveState();
+    $("fast-review-summary").hidden = !(session.mode === "easyReview" && session.fastMode);
     if (session.mode === "knownReview") {
       $("complete-summary").textContent = state.language === "en"
         ? `Completed random review of ${session.initialCount} known words; remembered ${session.remembered} times and forgot ${session.forgotten} times this round.`
         : `已完成 ${session.initialCount} 个熟词的随机复习；本轮标记记住 ${session.remembered} 次，忘记 ${session.forgotten} 次。`;
       $("continue-button").hidden = true;
     } else if (session.mode === "easyReview") {
-      $("complete-summary").textContent = state.language === "en"
-        ? `Completed ordered review of ${session.initialCount} difficult words; remembered ${session.remembered} times and forgot ${session.forgotten} times this round.`
-        : `已完成 ${session.initialCount} 个易忘词的顺序复习；本轮标记记住 ${session.remembered} 次，忘记 ${session.forgotten} 次。`;
+      $("complete-summary").textContent = session.fastMode
+        ? tr("fastRemembered", { n: session.remembered, m: session.forgotten })
+        : (state.language === "en"
+          ? `Completed ordered review of ${session.initialCount} difficult words; remembered ${session.remembered} times and forgot ${session.forgotten} times this round.`
+          : `已完成 ${session.initialCount} 个易忘词的顺序复习；本轮标记记住 ${session.remembered} 次，忘记 ${session.forgotten} 次。`);
+      if (session.fastMode) renderFastReviewSummary(session.deckId);
       $("continue-button").hidden = true;
     } else if (session.mode === "combined") {
       $("complete-summary").textContent = state.language === "en"
@@ -2623,6 +2745,24 @@
     session = null;
     renderDashboard();
     showView($("dashboard-view"));
+  }
+
+  function renderFastReviewSummary(deckId) {
+    const list = $("fast-review-summary-list");
+    list.innerHTML = "";
+    easyWordItems(deckId).forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "easy-words-row";
+      row.setAttribute("role", "row");
+      const word = document.createElement("span");
+      word.setAttribute("role", "cell");
+      word.textContent = item.word;
+      const count = document.createElement("strong");
+      count.setAttribute("role", "cell");
+      count.textContent = String(wordForgetCount(deckId, item.key));
+      row.append(word, count);
+      list.appendChild(row);
+    });
   }
 
   function handleNativeBack() {
@@ -2739,6 +2879,7 @@
     if (event.target === $("combined-settings-modal")) closeCombinedSettings();
   });
   $("easy-words-start-button").addEventListener("click", confirmEasyWords);
+  $("easy-words-fast-button").addEventListener("click", confirmEasyWordsFast);
   $("easy-words-cancel-button").addEventListener("click", closeEasyWords);
   $("easy-words-close-button").addEventListener("click", closeEasyWords);
   $("easy-words-modal").addEventListener("click", (event) => {
