@@ -11,10 +11,17 @@ def main() -> int:
         import win32api  # noqa: F401
         import win32cred  # noqa: F401
         from portable_manager import PROJECT
+        from portable_gui import App
+        from uninstaller_gui import Uninstaller
 
         qmd = PROJECT / "deploy" / "qmd-vnsee-layout" / "vnsee-asivery-clip-v7-landscape.qmd"
         if not qmd.is_file():
             raise FileNotFoundError(f"Release QMD is missing: {qmd}")
+        for factory in (App, Uninstaller):
+            window = factory().root
+            window.withdraw()
+            window.update_idletasks()
+            window.destroy()
         return 0
 
     if "--uninstall" in sys.argv:
