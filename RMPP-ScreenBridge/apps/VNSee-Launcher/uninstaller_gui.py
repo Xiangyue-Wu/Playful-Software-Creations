@@ -244,7 +244,10 @@ class Uninstaller:
         tightvnc_msi = project / "downloads" / "tightvnc-2.8.90-gpl-setup-64bit.msi"
         if tightvnc_msi.is_file():
             from portable_gui import TIGHTVNC_SHA256, TIGHTVNC_SIZE
-            if tightvnc_msi.stat().st_size == TIGHTVNC_SIZE and manager.file_sha(tightvnc_msi) == TIGHTVNC_SHA256:
+            tightvnc_receipt = project / "config" / "tightvnc-install-receipt.json"
+            if tightvnc_receipt.exists():
+                kept.append("downloads/tightvnc-2.8.90-gpl-setup-64bit.msi（TightVNC 收据仍在，保留以便安全重试卸载）")
+            elif tightvnc_msi.stat().st_size == TIGHTVNC_SIZE and manager.file_sha(tightvnc_msi) == TIGHTVNC_SHA256:
                 tightvnc_msi.unlink()
                 removed.append(str(tightvnc_msi.relative_to(project)))
             else:

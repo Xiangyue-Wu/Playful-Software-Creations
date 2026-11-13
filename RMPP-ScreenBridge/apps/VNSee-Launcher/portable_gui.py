@@ -196,7 +196,26 @@ $item=@($items)[0]
     return json.loads(result.stdout.strip())
 
 
-def record_tightvnc_install(exe: pathlib.Path) -> pathlib.Path:
+def tightvnc_install_records() -> list[dict]:
+    script = r"""
+$keys=@('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
+$items=@(Get-ItemProperty $keys -ErrorAction SilentlyContinue |
+  Where-Object { $_.DisplayName -match '^TightVNC' } |
+  ForEach-Object { @{ProductCode=(Split-Path $_.PSPath -Leaf);DisplayName=[string]$_.DisplayName;Version=[string]$_.DisplayVersion} })
+ConvertTo-Json -InputObject $items -Compress -Depth 3
+"""
+    result = _powershell(script)
+    if result.returncode != 0:
+        raise RuntimeError("Windows 无法读取 TightVNC 安装记录；未修改现有程序")
+    out = result.stdout.strip()
+    if not out:
+        return []
+    items = json.loads(out)
+    return items if isinstance(items, list) else [items]
+
+
+def record_tightvnc_install(exe: pathlib.Path, preexisting_product: bool) -> pathlib.Path:
     product = tightvnc_product()
     if not re.fullmatch(r"\{?[0-9a-fA-F-]{36}\}?", product.get("ProductCode", "")):
         raise RuntimeError("TightVNC 安装记录没有有效产品代码；无法建立安全卸载收据")
@@ -208,6 +227,7 @@ def record_tightvnc_install(exe: pathlib.Path) -> pathlib.Path:
         "product_code": product["ProductCode"],
         "display_name": product["DisplayName"],
         "version": product["Version"],
+        "preexisting_product": bool(preexisting_product),
         "service_exe": str(exe.resolve()),
         "service_exe_sha256": manager.file_sha(exe),
         "msi_sha256": TIGHTVNC_SHA256,
@@ -215,8 +235,14 @@ def record_tightvnc_install(exe: pathlib.Path) -> pathlib.Path:
     path = manager.PROJECT / "config" / "tightvnc-install-receipt.json"
     if path.exists():
         existing = json.loads(path.read_text(encoding="utf-8"))
-        if existing != receipt:
+        if (existing.get("format") != 1 or existing.get("owner") != "RMPP-ScreenBridge"
+                or existing.get("product_code") != receipt["product_code"]
+                or existing.get("service_exe") != receipt["service_exe"]
+                or existing.get("service_exe_sha256") != receipt["service_exe_sha256"]
+                or existing.get("msi_sha256") != TIGHTVNC_SHA256):
             raise RuntimeError("已有 TightVNC 安装收据与当前安装不符；保留现状，不覆盖")
+        # Preserve whether this project created the product originally. A repair
+        # must not turn a previously owned install into a pre-existing one.
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -254,18 +280,19 @@ def ensure_tightvnc(ask, progress) -> pathlib.Path:
                             "if($p){exit 2}; exit 0")
         if probe.returncode != 0:
             raise RuntimeError("5900 端口已有未识别监听；为避免覆盖其他 VNC 实例，停止安装")
-        installed = _powershell("$p=Get-ItemProperty @('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',"
-                                 "'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*') "
-                                 "-ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -match '^TightVNC'}; "
-                                 "if($p){exit 2}; exit 0")
-        if installed.returncode != 0:
-            raise RuntimeError("检测到已有 TightVNC 安装记录但没有可核验服务；为避免覆盖用户安装，停止自动安装")
+        records = tightvnc_install_records()
         msi = download_tightvnc(progress)
-        if not ask("安装 TightVNC Server", "将通过 Windows UAC 安装 TightVNC 2.8.90 Server-only。设置仅接受本机 loopback、关闭 VNC 密码认证和 Web 访问、不添加防火墙例外；不会修改 RMPP。继续吗？"):
+        prior = "；检测到现有登记：" + "、".join(
+            f"{row.get('DisplayName', 'TightVNC')} {row.get('Version', '版本未知')} [{row.get('ProductCode', '代码未知')}]"
+            for row in records) if records else ""
+        prompt = ("将通过 Windows UAC 使用官方 TightVNC 2.8.90 MSI 安装/修复 Server-only。"
+                  "服务端口为 5900，启用 loopback-only、关闭 Web 访问和 VNC 密码认证、不添加防火墙例外。"
+                  "若电脑已有 TightVNC，安装器可能执行同系列升级；不会主动删除已有文件。" + prior + "。继续吗？")
+        if not ask("安装或修复 TightVNC Server", prompt):
             raise RuntimeError("你取消了 TightVNC 安装；RMPP XOVI 尚未启动")
         install_tightvnc(msi, progress)
         exe = tightvnc_exe()
-        receipt = record_tightvnc_install(exe)
+        receipt = record_tightvnc_install(exe, preexisting_product=bool(records))
         progress(f"TightVNC 已按项目配置安装；本机卸载收据：{receipt}")
         validate_tightvnc_settings(tightvnc_settings())
 
@@ -300,16 +327,29 @@ def uninstall_tightvnc_if_owned(progress=lambda text: None) -> str:
             raise RuntimeError("当前 TightVNC 服务路径与安装收据不符")
     except Exception as exc:
         return f"TightVNC 保留：无法证明它由本项目安装（{exc}）。"
-    progress("将通过 Windows UAC 卸载收据匹配的本项目 TightVNC 2.8.90；这会停止它的 VNC 服务并断开投屏。")
+    preexisting = bool(receipt.get("preexisting_product", False))
+    if preexisting:
+        msi = manager.CACHE / pathlib.PurePosixPath(TIGHTVNC_URL).name
+        if (not msi.is_file() or msi.stat().st_size != TIGHTVNC_SIZE
+                or manager.file_sha(msi) != TIGHTVNC_SHA256):
+            return "TightVNC 保留：原安装记录仍在，但验证过的 MSI 缓存不存在，无法安全只移除本项目加入的 Server 功能。"
+        progress("将通过 Windows UAC 移除本项目加入的 TightVNC Server 功能，保留此前已存在的 TightVNC 产品/Viewer；这会断开投屏。")
+    else:
+        progress("将通过 Windows UAC 卸载收据匹配的本项目 TightVNC 2.8.90；这会停止 VNC 服务并断开投屏。")
     code = receipt["product_code"]
+    if preexisting:
+        msi_arg = str(msi)
+        args = f'/i "{msi_arg}" /qn /norestart REMOVE=Server'
+    else:
+        args = f'/x {code} /qn /norestart'
     script = (f"$p=Start-Process -FilePath 'msiexec.exe' -ArgumentList "
-              f"{_ps_quote('/x ' + code + ' /qn /norestart')} -Verb RunAs -Wait -PassThru; exit $p.ExitCode")
+              f"{_ps_quote(args)} -Verb RunAs -Wait -PassThru; exit $p.ExitCode")
     result = _powershell(script, timeout=600)
     if result.returncode != 0:
         return f"TightVNC 卸载未完成（退出码 {result.returncode}）；收据和文件保留。"
     state, _pid = tightvnc_service_state()
     if state != "Absent":
-        return "TightVNC MSI 已运行，但服务仍存在；保留收据供检查。"
+        return "TightVNC MSI 已运行，但 Server 服务仍存在；保留收据供检查。"
     path.unlink()
     return "已按匹配的本项目收据卸载 TightVNC 2.8.90。"
 
