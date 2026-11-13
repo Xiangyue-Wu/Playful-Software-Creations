@@ -6,11 +6,11 @@ RMPP ScreenBridge mirrors a selected Windows screen region to a reMarkable Paper
 
 ## Use the release ZIP
 
-1. Download `RMPP-ScreenBridge-v0.1.3-win-x64.zip` from [Releases](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases) and extract it to a writable folder.
+1. Download `RMPP-ScreenBridge-v0.1.4-win-x64.zip` from [Releases](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases) and extract it to a writable folder.
 2. Connect the RMPP by USB and enable USB SSH. Windows needs Internet access on first launch; the tablet does not download software.
-3. Double-click `启动安装器.cmd`, enter the device password, and click **一键准备并开始投屏**. The wizard checks the device and downloads, verifies, and installs missing components. If an old TightVNC record exists but its server service is missing, the wizard shows the product record and uses Windows UAC to repair/upgrade the official server-only feature. No firewall exception is added; Web access and VNC password authentication are disabled, and TightVNC's loopback-only access policy is enabled.
-4. Save unsynced notes before creating the device hashtab or starting XOVI. The wizard backs up device data to the project folder before device changes and asks before restarting `xochitl`. When ready, launch **VNSee asivery Test** from AppLoad.
-5. Exit VNSee before using `卸载RMPP-ScreenBridge.cmd`. The device uninstaller verifies the project receipt and file hashes. If this project installed TightVNC, the Windows uninstaller can remove it as well.
+3. Double-click `启动安装器.cmd`, enter the device password, and click **一键投屏**. The wizard checks the device and downloads, verifies, and installs missing components. If an old TightVNC record exists but its server service is missing, the wizard shows the product record and uses Windows UAC to repair/upgrade the official server-only feature. No firewall exception is added; Web access and VNC password authentication are disabled, and TightVNC's loopback-only access policy is enabled.
+4. Save unsynced notes before creating the device hashtab or starting XOVI. The wizard prompts for and completes a device backup, then asks before restarting `xochitl`. When ready, launch **VNSee asivery Test** from AppLoad.
+5. Exit VNSee and click **卸载本程序安装的文件** in the wizard. After device removal, it shows the exact path to `卸载RMPP-ScreenBridge.cmd`. Close the projection window before running that uninstaller. Its separate full-removal option deletes the extracted folder, including local RMPP note/PDF backups, after explicit confirmation. It checks the device receipt and file hashes, and removes TightVNC only when this project owns its installation.
 
 ## Supported setup and safety
 

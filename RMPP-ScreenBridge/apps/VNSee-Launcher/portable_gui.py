@@ -474,9 +474,9 @@ def pipe(channel: paramiko.Channel) -> None:
 class App:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("RMPP VNSee · 离线安装与投屏")
-        self.root.geometry("650x580")
-        self.root.minsize(570, 500)
+        self.root.title("RMPP ScreenBridge")
+        self.root.geometry("650x470")
+        self.root.minsize(570, 420)
         self.client = None
         self.forward = False
         self.busy = False
@@ -492,7 +492,7 @@ class App:
 
         body = ttk.Frame(self.root, padding=16)
         body.pack(fill="both", expand=True)
-        ttk.Label(body, text="RMPP VNSee", font=("Segoe UI", 18, "bold")).pack(anchor="w")
+        ttk.Label(body, text="RMPP ScreenBridge", font=("Segoe UI", 18, "bold")).pack(anchor="w")
         ttk.Label(body, text="Windows 下载并验证 → USB SSH 上传 → RMPP 离线安装", font=("Segoe UI", 10)).pack(anchor="w", pady=(2, 15))
         form = ttk.Frame(body)
         form.pack(fill="x")
@@ -503,27 +503,19 @@ class App:
         credentials = ttk.Frame(body)
         credentials.pack(fill="x", pady=(6, 0))
         ttk.Checkbutton(credentials, text="使用 Windows 凭据管理器保存 SSH 密码", variable=self.remember).pack(side="left")
-        ttk.Button(credentials, text="删除已存密码", command=self.forget_password).pack(side="right")
         capture = ttk.LabelFrame(body, text="Windows 捕获区域（已验证：1620 × 720）", padding=10)
         capture.pack(fill="x", pady=14)
         for col, (name, value) in enumerate((("X", self.x), ("Y", self.y), ("宽", self.width), ("高", self.height))):
             ttk.Label(capture, text=name).grid(row=0, column=col, sticky="w")
             ttk.Entry(capture, textvariable=value, width=10).grid(row=1, column=col, sticky="ew", padx=(0, 8))
             capture.columnconfigure(col, weight=1)
-        ttk.Button(capture, text="恢复默认：0, 805, 1620 × 720", command=self.reset_capture).grid(
-            row=2, column=0, columnspan=4, sticky="ew", pady=(9, 0))
         actions = ttk.Frame(body)
         actions.pack(fill="x", pady=5)
-        for row, label, action in (
-            (0, "检测设备", self.check),
-            (1, "一键安装离线文件", self.install),
-            (2, "生成/核对设备 hashtab", self.complete),
-            (3, "一键准备并开始投屏", self.start),
-            (4, "恢复 stock 界面", self.restore),
-            (5, "卸载本程序安装的文件", self.uninstall),
-            (6, "备份当前 RMPP 到临时备份", self.backup_device),
+        for column, label, action in (
+            (0, "一键投屏", self.start),
+            (1, "卸载本程序安装的文件", self.uninstall),
         ):
-            ttk.Button(actions, text=label, command=action).grid(row=row // 2, column=row % 2, sticky="ew", padx=4, pady=4)
+            ttk.Button(actions, text=label, command=action).grid(row=0, column=column, sticky="ew", padx=4, pady=4)
         actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
         ttk.Label(body, text="状态与错误（可选中复制）").pack(anchor="w", pady=(12, 4))
@@ -541,6 +533,9 @@ class App:
             self.output.configure(state="disabled")
             self.status.set(text)
         self.root.after(0, update)
+
+    def inform(self, title: str, message: str):
+        self.root.after(0, lambda: messagebox.showinfo(title, message, parent=self.root))
 
     def reset_capture(self):
         for variable, value in ((self.x, "0"), (self.y, "805"), (self.width, "1620"), (self.height, "720")):
@@ -725,9 +720,13 @@ class App:
                 raise RuntimeError("TightVNC 实际 framebuffer 尺寸未变为 1620×720")
             self.ensure_forward(client)
             if not active:
-                if not self.ask("启动 XOVI", "请保存 RMPP 尚未同步的笔记。执行前会自动备份到项目临时备份\\RMPP；随后临时启动 XOVI 并重启一次 xochitl。备份失败会取消。继续吗？"):
+                if not self.ask("备份 RMPP", "请先保存并关闭 RMPP 上正在编辑的笔记。现在将笔记/PDF、相关配置及 rmtool 状态备份到本项目临时备份\\RMPP；备份完整性检查通过后才会询问是否重启。继续吗？"):
                     return
-                manager.activate(client, self.show)
+                backup = manager.backup_device_data(client, "activate-xovi", self.show)
+                if not self.ask("重启 xochitl", f"RMPP 数据已备份并校验：{backup}\n现在授权临时启动 XOVI 并重启一次 xochitl，以显示 AppLoad 吗？"):
+                    self.show("备份已完成；已取消 xochitl 重启，RMPP 保持 stock。")
+                    return
+                manager.activate(client, self.show, prepared_backup=backup)
             self.show("已就绪：保持此窗口打开，在 RMPP AppLoad 选择 VNSee asivery Test。")
         self.task(work)
 
@@ -744,7 +743,10 @@ class App:
             if not self.ask("卸载", "请先在 AppLoad 正常退出 VNSee 并保存未同步笔记。每个恢复或删除步骤前都会自动备份到项目临时备份\\RMPP；若本项目 XOVI 正在运行，将恢复 stock 并重启 xochitl，然后按安装收据核对并移除文件。任一步备份失败都会取消该步。继续吗？"):
                 return
             manager.uninstall(self.connect(), self.show)
-            self.show("本安装器拥有的设备文件已卸载。")
+            uninstaller = manager.PROJECT / "卸载RMPP-ScreenBridge.cmd"
+            notice = f"要卸载包括本程序的所有内容，请点击“{uninstaller}”"
+            self.show(f"本安装器拥有的设备文件已卸载。{notice}")
+            self.inform("设备文件已卸载", notice)
         self.task(work)
 
     def close(self):

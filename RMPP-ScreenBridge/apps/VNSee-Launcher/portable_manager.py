@@ -609,7 +609,7 @@ def generate_hashtab(client, progress=lambda text: None) -> dict:
     return result
 
 
-def activate(client, progress=lambda text: None) -> None:
+def activate(client, progress=lambda text: None, prepared_backup: pathlib.Path | None = None) -> None:
     """Start only the owned XOVI tree after explicit UI approval.
 
     This interrupts xochitl. The caller must ask the user to save notes first.
@@ -628,7 +628,19 @@ def activate(client, progress=lambda text: None) -> None:
     # stock script must uncover exactly this unit after unmounting tmpfs.
     before = remote(client, "sha256sum /etc/systemd/system/xochitl.service.d/*.conf 2>/dev/null || true")
     log("activation_before", persistent_dropins=before.strip())
-    backup_device_data(client, "activate-xovi", progress)
+    if prepared_backup is None:
+        backup_device_data(client, "activate-xovi", progress)
+    else:
+        backup_path = prepared_backup.resolve()
+        backup_root = BACKUP_ROOT.resolve()
+        manifest_path = backup_path.with_suffix(backup_path.suffix + ".json")
+        if backup_path.parent != backup_root or not backup_path.is_file() or not manifest_path.is_file():
+            raise RuntimeError("启动前备份路径不属于本项目或文件不完整；XOVI 未启动")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if (manifest.get("format") != 1 or manifest.get("operation") != "activate-xovi"
+                or manifest.get("sha256") != file_sha(backup_path)
+                or manifest.get("size_bytes") != backup_path.stat().st_size):
+            raise RuntimeError("启动前备份校验失败；XOVI 未启动")
     try:
         remote(client, "set -eu; /home/root/xovi/start; systemctl is-active --quiet xochitl", timeout=90)
         loaded = remote(client, "grep -Fhl /home/root/xovi/xovi.so /proc/[0-9]*/maps 2>/dev/null | head -n 1")

@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.1.3',
+    [string]$Version = '0.1.4',
     [string]$OutputDirectory = (Join-Path (Split-Path -Parent $PSScriptRoot) 'release-output')
 )
 $ErrorActionPreference = 'Stop'

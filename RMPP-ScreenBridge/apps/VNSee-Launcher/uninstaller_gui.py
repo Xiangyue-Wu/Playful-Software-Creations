@@ -1,6 +1,7 @@
 """Standalone, receipt-based uninstaller for RMPP ScreenBridge."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 import pathlib
@@ -40,8 +41,8 @@ class Uninstaller:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("RMPP ScreenBridge 卸载器")
-        self.root.geometry("670x530")
-        self.root.minsize(610, 470)
+        self.root.geometry("670x565")
+        self.root.minsize(610, 500)
         self.host = tk.StringVar(value=HOST_DEFAULT)
         self.password = tk.StringVar(value=saved_password(HOST_DEFAULT))
         self.clean_windows = tk.BooleanVar(value=True)
@@ -79,11 +80,13 @@ class Uninstaller:
                    command=self.uninstall_all).pack(side="left", expand=True, fill="x", padx=(0, 5))
         ttk.Button(buttons, text="只清理 Windows 文件",
                    command=self.uninstall_local).pack(side="left", expand=True, fill="x", padx=(5, 0))
+        ttk.Button(body, text="卸载设备并彻底删除本项目目录（含本地备份）",
+                   command=self.uninstall_everything).pack(fill="x", pady=(5, 0))
 
         ttk.Label(body, text="状态与结果（可选中复制）").pack(anchor="w", pady=(11, 3))
         self.output = tk.Text(body, height=13, wrap="word")
         self.output.pack(fill="both", expand=True)
-        self.say("提示：源码和卸载器本身会保留，便于重试与审计；用户笔记、其他 SSH 主机密钥、rmtool 和非本项目文件不会删除。")
+        self.say("普通清理会保留源码和卸载器；“彻底删除”需另行确认，会删除本解压目录内的本地备份。RMPP 笔记、rmtool 和其他 SSH 主机密钥不会被删除。")
 
     def say(self, text: str):
         def append():
@@ -189,6 +192,64 @@ class Uninstaller:
             self.say("Windows 本地清理完成：" + (", ".join(removed) if removed else "没有可安全识别的缓存文件") + ".")
             if kept:
                 self.say("未删除（哈希或收据不符）：" + ", ".join(kept))
+        self.run_worker(work)
+
+    def uninstall_everything(self):
+        raw_project = manager.PROJECT
+        project = raw_project.resolve()
+        required = ("BUILD-INFO.txt", "RMPP-ScreenBridge.exe", "启动安装器.cmd", "卸载RMPP-ScreenBridge.cmd")
+        allowed = set(required) | {"README.md", "README.zh-CN.md", "LICENSE", "THIRD_PARTY.md",
+                                   "docs", "deploy", "downloads", "config", "logs", "临时备份", ".venv"}
+        if raw_project.is_symlink() or raw_project != project or any(not (project / name).is_file() for name in required):
+            self.say("拒绝彻底删除：当前不是完整的 Release 解压目录；源码和未知目录会保留。")
+            return
+        unknown = sorted(p.name for p in project.iterdir() if p.name not in allowed)
+        if unknown:
+            self.say("拒绝彻底删除：目录内有未识别的文件/目录：" + ", ".join(unknown))
+            return
+        if any(p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction()) for p in project.rglob("*")):
+            self.say("拒绝彻底删除：项目目录内存在符号链接或联接点。")
+            return
+        prompt = (f"即将按安装收据卸载 RMPP 设备文件和本项目安装的 Windows TightVNC Server，"
+                  f"再删除整个目录及其中的笔记/PDF 备份：\n{project}\n\n"
+                  "请先保存 RMPP 笔记、正常退出 VNSee，并关闭投屏主窗口。"
+                  "设备卸载失败时会保留目录，以便重试。确定继续吗？")
+        if not messagebox.askyesno("彻底卸载 RMPP ScreenBridge", prompt, parent=self.root):
+            return
+        host, password = self.host.get().strip(), self.password.get()
+
+        def work():
+            client = None
+            try:
+                client = self.connect_to(host, password)
+                manager.uninstall(client, self.say)
+                self.say("RMPP 设备文件卸载完成；正在核对 Windows 清理结果…")
+            finally:
+                if client:
+                    client.close()
+            removed, kept = self.cleanup_windows(host, False, True)
+            if kept or (project / "config" / "tightvnc-install-receipt.json").exists():
+                self.say("Windows 清理尚有未完成项目，整个目录已保留：" + ", ".join(kept))
+                return
+            self.say("已清理：" + (", ".join(removed) if removed else "无额外缓存"))
+            quoted = "'" + str(project).replace("'", "''") + "'"
+            script = (f"$target={quoted}; $expected={quoted}; "
+                      "if ([IO.Path]::GetFullPath($target) -ne $expected -or "
+                      "((Get-Item -LiteralPath $target).Attributes -band [IO.FileAttributes]::ReparsePoint) -or "
+                      "-not (Test-Path -LiteralPath (Join-Path $target 'BUILD-INFO.txt')) -or "
+                      "-not (Test-Path -LiteralPath (Join-Path $target '卸载RMPP-ScreenBridge.cmd'))) {exit 2}; "
+                      f"Wait-Process -Id {os.getpid()} -Timeout 180 -ErrorAction SilentlyContinue; "
+                      "Start-Sleep -Seconds 2; "
+                      "for($i=0;$i -lt 10;$i++){try{Remove-Item -LiteralPath $target -Recurse -Force "
+                      "-ErrorAction Stop; exit 0}catch{Start-Sleep -Seconds 2}}; exit 3")
+            encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+            subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+                             creationflags=0x08000000, close_fds=True)
+            def finish():
+                messagebox.showinfo("卸载完成", "设备文件已卸载。本窗口关闭后将删除整个项目目录及其中的临时备份。", parent=self.root)
+                self.root.destroy()
+            self.root.after(0, finish)
+
         self.run_worker(work)
 
     def cleanup_windows(self, host: str, remove_venv: bool, remove_tightvnc: bool = False) -> tuple[list[str], list[str]]:

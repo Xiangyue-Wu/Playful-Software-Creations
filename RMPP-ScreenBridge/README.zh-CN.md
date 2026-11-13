@@ -6,11 +6,11 @@ RMPP ScreenBridge 把 Windows 屏幕选定区域投到 reMarkable Paper Pro（RM
 
 ## 使用 Release ZIP
 
-1. 从 [Releases](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases) 下载 `RMPP-ScreenBridge-v0.1.3-win-x64.zip`，解压到可写目录。
+1. 从 [Releases](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases) 下载 `RMPP-ScreenBridge-v0.1.4-win-x64.zip`，解压到可写目录。
 2. 通过 USB 连接 RMPP 并启用 USB SSH。首次启动需要 Windows 联网；RMPP 不联网下载。
-3. 双击 `启动安装器.cmd`，输入设备密码，点击“一键准备并开始投屏”。前端检测设备，按需下载、验证并离线安装组件。若发现 TightVNC 旧安装记录但服务已丢失，会先显示产品记录，再用 Windows UAC 修复/升级官方 Server-only 组件；安装不添加防火墙例外，关闭 Web 访问和 VNC 密码认证，并启用 loopback-only 访问策略。
-4. 首次安装、生成设备 hashtab 或启动 XOVI 前，先保存 RMPP 未同步笔记。向导会先将设备数据备份到电脑项目目录，并在重启 `xochitl` 前请求确认。完成后，在 AppLoad 中启动 **VNSee asivery Test**。
-5. 退出 VNSee 后，可双击 `卸载RMPP-ScreenBridge.cmd`。卸载器按设备收据和文件哈希移除本项目安装的设备文件；若本项目曾自动安装 TightVNC，也可在 Windows 卸载器中选择移除它。
+3. 双击 `启动安装器.cmd`，输入设备密码，点击“一键投屏”。前端检测设备，按需下载、验证并离线安装组件。若发现 TightVNC 旧安装记录但服务已丢失，会先显示产品记录，再用 Windows UAC 修复/升级官方 Server-only 组件；安装不添加防火墙例外，关闭 Web 访问和 VNC 密码认证，并启用 loopback-only 访问策略。
+4. 首次安装、生成设备 hashtab 或启动 XOVI 前，先保存 RMPP 未同步笔记。前端会提示并完成设备备份，然后再请求重启 `xochitl` 的授权。完成后，在 AppLoad 中启动 **VNSee asivery Test**。
+5. 退出 VNSee 后，点击前端“卸载本程序安装的文件”。设备文件卸载完成后，前端会显示 `卸载RMPP-ScreenBridge.cmd` 的准确路径。关闭投屏窗口后运行该卸载器；若要删除整个解压目录（包括本机保存的 RMPP 笔记/PDF 备份），选择“彻底删除”并再次确认。若本项目曾自动安装 TightVNC，卸载器会先核对收据再卸载。
 
 ## 支持范围与安全
 
