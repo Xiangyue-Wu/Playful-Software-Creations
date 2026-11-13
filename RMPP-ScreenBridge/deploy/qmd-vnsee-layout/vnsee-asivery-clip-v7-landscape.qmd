@@ -1,0 +1,38 @@
+; Experimental QMD v7: landscape-only crop, no extra rotation.
+; FBController remains a direct syntactic child of mainWindowView for AppLoad's
+; built-in QMD selector, but its visual parent changes to the full-size content
+; item only for the dedicated VNSee test app in fullscreen mode.
+AFFECT /appload/qml/window.qml
+    TRAVERSE FocusScope#root > Rectangle#mainWindowView
+        LOCATE BEFORE FBController#windowCanvas
+        INSERT {
+            Item {
+                id: vnseeClipViewport
+                visible: windowCanvas.vnseeClipMode
+                width: 960
+                height: 720
+                clip: true
+                property real vnseeClipScale: Math.min(parent.width / 960, parent.height / 720)
+                x: (parent.width - 960 * vnseeClipScale) / 2
+                y: (parent.height - 720 * vnseeClipScale) / 2
+                transformOrigin: Item.TopLeft
+                rotation: 0
+                scale: vnseeClipScale
+
+                Item {
+                    id: vnseeClipContent
+                    width: 1620
+                    height: 2160
+                }
+            }
+        }
+    END TRAVERSE
+
+    TRAVERSE FocusScope#root > Rectangle#mainWindowView > FBController#windowCanvas
+        LOCATE BEFORE ALL
+        INSERT {
+            property bool vnseeClipMode: root.appName === "VNSee asivery Test" && root.fullscreen && mainWindowView.width > mainWindowView.height
+            parent: vnseeClipMode ? vnseeClipContent : mainWindowView
+        }
+    END TRAVERSE
+END AFFECT

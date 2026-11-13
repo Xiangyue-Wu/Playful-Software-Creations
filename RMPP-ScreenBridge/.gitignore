@@ -1,0 +1,19 @@
+# Do not commit personal device or Windows state.
+backups/
+临时备份/
+downloads/
+logs/
+installers/
+tools/
+*.apk
+*.tar
+*.tar.gz
+*.msi
+*.reg
+*.pem
+id_*
+known_hosts
+__pycache__/
+*.pyc
+.venv/
+deploy/portable-bundles/
