@@ -1,6 +1,6 @@
 # Publication review
 
-This candidate is a **portable, guided installer source draft**, not yet a verified public release. It has not been uploaded to GitHub.
+The source is published in the `RMPP-ScreenBridge` directory of the public `Playful-Software-Creations` repository. It is a portable, guided installer for controlled testing, not a production-ready universal release.
 
 ## Implemented
 
@@ -16,7 +16,7 @@ This candidate is a **portable, guided installer source draft**, not yet a verif
 2. Test interrupted downloads, SSH loss during transfer, interrupted hashtab generation, and interrupted XOVI startup; document exact recovery outcomes.
 3. Confirm runtime prerequisites on a clean Windows account: Python, TightVNC Server configuration, USB route, SSH host-key enrollment, and optional Windows Credential Manager.
 4. Review QMD compatibility and rollback for each additional RMPP firmware before expanding the supported profile. The installer deliberately rejects other versions.
-5. Review all source/license notices and explicitly approve public publication. Do not publish personal logs, device archives, notes, credentials, or third-party binaries.
+5. Keep the published tree free of personal logs, device archives, notes, credentials, and third-party binaries. The current repository snapshot excludes those materials.
 6. Verify a generated backup by restoring it to a separate test location/device; the current uninstaller does not automatically restore a snapshot.
 
 The current result is suitable for **local code review and controlled testing on the stated profile**. It must not be described as tested on every RMPP or as an unattended installer.
