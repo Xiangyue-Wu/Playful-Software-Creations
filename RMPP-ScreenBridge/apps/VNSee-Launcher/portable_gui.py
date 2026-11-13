@@ -12,6 +12,7 @@ import re
 import socket
 import subprocess
 import threading
+import time
 import urllib.request
 import tkinter as tk
 import winreg
@@ -271,7 +272,6 @@ def set_tightvnc_capture(exe: pathlib.Path, rect: str) -> None:
 def ensure_tightvnc(ask, progress) -> pathlib.Path:
     try:
         exe = tightvnc_exe()
-        validate_tightvnc_settings(tightvnc_settings())
     except RuntimeError as exc:
         if "没有安装 TightVNC Server 服务" not in str(exc):
             raise
@@ -294,10 +294,20 @@ def ensure_tightvnc(ask, progress) -> pathlib.Path:
         exe = tightvnc_exe()
         receipt = record_tightvnc_install(exe, preexisting_product=bool(records))
         progress(f"TightVNC 已按项目配置安装；本机卸载收据：{receipt}")
-        validate_tightvnc_settings(tightvnc_settings())
 
     state, pid = tightvnc_service_state()
     if state != "Running":
+        # A stopped server has no observable listening boundary. Do not start
+        # an unknown installation when its protected HKLM settings are unreadable.
+        try:
+            validate_tightvnc_settings(tightvnc_settings())
+        except RuntimeError:
+            receipt_path = manager.PROJECT / "config" / "tightvnc-install-receipt.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8")) if receipt_path.is_file() else {}
+            if (receipt.get("owner") != "RMPP-ScreenBridge"
+                    or receipt.get("service_exe") != str(exe.resolve())
+                    or receipt.get("service_exe_sha256") != manager.file_sha(exe)):
+                raise RuntimeError("TightVNC 服务已停止且无法读取安全设置；不会启动未知配置的服务")
         if not ask("启动 TightVNC Server", "TightVNC 服务已安装并通过本机访问配置检查。现在启动服务以继续投屏吗？"):
             raise RuntimeError("你取消了 TightVNC 服务启动；RMPP XOVI 尚未启动")
         start_tightvnc_service()
@@ -355,11 +365,12 @@ def uninstall_tightvnc_if_owned(progress=lambda text: None) -> str:
 
 
 def vnc_loopback() -> None:
-    validate_tightvnc_settings(tightvnc_settings())
     query = ("$p=@(Get-NetTCPConnection -LocalPort 5900 -State Listen -ErrorAction SilentlyContinue | "
              "Select-Object LocalAddress,OwningProcess); "
+             "$web=@(Get-NetTCPConnection -LocalPort 5800 -State Listen -ErrorAction SilentlyContinue | "
+             "Select-Object LocalAddress,OwningProcess); "
              "$s=Get-CimInstance Win32_Service -Filter \"Name='tvnserver'\"; "
-             "@{Listeners=$p;ServicePid=[int]$s.ProcessId;State=$s.State} | ConvertTo-Json -Compress -Depth 4")
+             "@{Listeners=$p;WebListeners=$web;ServicePid=[int]$s.ProcessId;State=$s.State} | ConvertTo-Json -Compress -Depth 4")
     result = _powershell(query, timeout=15)
     if result.returncode != 0:
         raise RuntimeError("无法读取 TightVNC 监听状态")
@@ -372,9 +383,17 @@ def vnc_loopback() -> None:
         raise RuntimeError("TightVNC 服务没有在 Windows 5900 端口监听")
     if any(int(row["OwningProcess"]) != int(state.get("ServicePid", -1)) for row in rows):
         raise RuntimeError("Windows 5900 监听者不是已核验的 TightVNC 服务；拒绝复用")
-    allowed = {"127.0.0.1", "::1", "0.0.0.0", "::"}
+    allowed = {"127.0.0.1", "::1"}
     if any(row["LocalAddress"] not in allowed for row in rows):
-        raise RuntimeError("TightVNC 监听地址异常；拒绝继续")
+        raise RuntimeError("TightVNC 5900 未仅绑定 Windows 本机回环地址；拒绝继续")
+    web = state.get("WebListeners") or []
+    if isinstance(web, dict):
+        web = [web]
+    if any(int(row["OwningProcess"]) == int(state["ServicePid"]) for row in web):
+        raise RuntimeError("TightVNC Web 端口 5800 正在监听；拒绝继续")
+    size = rfb_size()  # Also verifies that the server offers security type 1.
+    manager.log("vnc_security_verified", bound_addresses=sorted({row["LocalAddress"] for row in rows}),
+                service_pid=state["ServicePid"], width=size[0], height=size[1])
 
 
 def read_exact(sock: socket.socket, size: int) -> bytes:
@@ -387,7 +406,7 @@ def read_exact(sock: socket.socket, size: int) -> bytes:
     return result
 
 
-def rfb_size() -> tuple[int, int]:
+def _rfb_size_once() -> tuple[int, int]:
     with socket.create_connection(("127.0.0.1", 5900), timeout=4) as sock:
         sock.settimeout(4)
         version = read_exact(sock, 12)
@@ -403,6 +422,17 @@ def rfb_size() -> tuple[int, int]:
         sock.sendall(b"\x01")
         header = read_exact(sock, 24)
         return int.from_bytes(header[:2], "big"), int.from_bytes(header[2:4], "big")
+
+
+def rfb_size() -> tuple[int, int]:
+    for attempt in range(3):
+        try:
+            return _rfb_size_once()
+        except (OSError, RuntimeError) as exc:
+            if "无密码类型 1" in str(exc) or "认证握手失败" in str(exc) or attempt == 2:
+                raise
+            time.sleep(0.6)
+    raise RuntimeError("VNC 握手未完成")
 
 
 def pipe(channel: paramiko.Channel) -> None:
