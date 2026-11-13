@@ -46,6 +46,7 @@ class Uninstaller:
         self.password = tk.StringVar(value=saved_password(HOST_DEFAULT))
         self.clean_windows = tk.BooleanVar(value=True)
         self.remove_venv = tk.BooleanVar(value=True)
+        self.remove_owned_tightvnc = tk.BooleanVar(value=True)
         self.busy = False
 
         body = ttk.Frame(self.root, padding=16)
@@ -69,6 +70,8 @@ class Uninstaller:
                         variable=self.clean_windows).pack(anchor="w")
         ttk.Checkbutton(local, text="同时删除本项目 .venv（不会卸载系统 Python）",
                         variable=self.remove_venv).pack(anchor="w", pady=(4, 0))
+        ttk.Checkbutton(local, text="卸载本项目自动安装的 TightVNC（仅收据、版本、路径、哈希全部匹配时）",
+                        variable=self.remove_owned_tightvnc).pack(anchor="w", pady=(4, 0))
 
         buttons = ttk.Frame(body)
         buttons.pack(fill="x")
@@ -135,12 +138,14 @@ class Uninstaller:
         if not messagebox.askyesno(
                 "卸载 RMPP ScreenBridge",
                 "设备端每个恢复/删除步骤前会先备份 RMPP 数据到项目临时备份\\RMPP，可能恢复 stock 并重启 xochitl；"
-                "请先在 RMPP 正常退出 VNSee 并保存未同步笔记。"
+                "Windows 部分可按收据卸载本程序自动安装的 TightVNC 2.8.90（会停止 VNC 服务并断开投屏）；"
+                "不会卸载你原先安装的 TightVNC。请先在 RMPP 正常退出 VNSee 并保存未同步笔记。"
                 "卸载仅处理本项目收据逐项列出的文件。继续吗？",
                 parent=self.root):
             return
         host, password = self.host.get().strip(), self.password.get()
         clean_windows, remove_venv = self.clean_windows.get(), self.remove_venv.get()
+        remove_tightvnc = self.remove_owned_tightvnc.get()
         def work():
             client = None
             device_done = False
@@ -161,7 +166,7 @@ class Uninstaller:
                 if client:
                     client.close()
             if clean_windows:
-                removed, kept = self.cleanup_windows(host, remove_venv)
+                removed, kept = self.cleanup_windows(host, remove_venv, remove_tightvnc)
                 self.say("Windows：已清理 " + (", ".join(removed) if removed else "无匹配的项目缓存文件") + ".")
                 if kept:
                     self.say("Windows：以下项目文件因哈希/收据不符而保留：" + ", ".join(kept))
@@ -172,22 +177,34 @@ class Uninstaller:
     def uninstall_local(self):
         if not messagebox.askyesno(
                 "只清理 Windows 项目文件",
-                "将清理本项目能按固定哈希或安装收据确认的下载、安装包、日志和凭据。"
+                "将清理本项目能按固定哈希或安装收据确认的下载、安装包、日志和凭据；"
+                "如勾选且本项目安装收据完全匹配，还会通过 UAC 卸载本程序自动安装的 TightVNC。"
                 "不会连接或修改 RMPP。源码及卸载器保留。继续吗？",
                 parent=self.root):
             return
         host, remove_venv = self.host.get().strip(), self.remove_venv.get()
+        remove_tightvnc = self.remove_owned_tightvnc.get()
         def work():
-            removed, kept = self.cleanup_windows(host, remove_venv)
+            removed, kept = self.cleanup_windows(host, remove_venv, remove_tightvnc)
             self.say("Windows 本地清理完成：" + (", ".join(removed) if removed else "没有可安全识别的缓存文件") + ".")
             if kept:
                 self.say("未删除（哈希或收据不符）：" + ", ".join(kept))
         self.run_worker(work)
 
-    def cleanup_windows(self, host: str, remove_venv: bool) -> tuple[list[str], list[str]]:
+    def cleanup_windows(self, host: str, remove_venv: bool, remove_tightvnc: bool = False) -> tuple[list[str], list[str]]:
         project = manager.PROJECT
         removed: list[str] = []
         kept: list[str] = []
+        if remove_tightvnc:
+            try:
+                from portable_gui import uninstall_tightvnc_if_owned
+                result = uninstall_tightvnc_if_owned(self.say)
+                if result.startswith("已按"):
+                    removed.append(result)
+                elif not result.startswith("没有本项目"):
+                    kept.append(result)
+            except Exception as exc:
+                kept.append(f"TightVNC 保留（卸载检查失败：{exc}）")
         cache = project / "downloads"
         for name, (url, size, digest) in manager.SOURCES.items():
             path = cache / pathlib.PurePosixPath(url).name
@@ -223,6 +240,15 @@ class Uninstaller:
         if log_path.is_file():
             log_path.unlink()
             removed.append(str(log_path.relative_to(project)))
+
+        tightvnc_msi = project / "downloads" / "tightvnc-2.8.90-gpl-setup-64bit.msi"
+        if tightvnc_msi.is_file():
+            from portable_gui import TIGHTVNC_SHA256, TIGHTVNC_SIZE
+            if tightvnc_msi.stat().st_size == TIGHTVNC_SIZE and manager.file_sha(tightvnc_msi) == TIGHTVNC_SHA256:
+                tightvnc_msi.unlink()
+                removed.append(str(tightvnc_msi.relative_to(project)))
+            else:
+                kept.append(str(tightvnc_msi.relative_to(project)) + "（大小或哈希不同）")
 
         if remove_venv:
             venv = project / ".venv"

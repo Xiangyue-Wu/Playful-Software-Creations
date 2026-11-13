@@ -5,11 +5,14 @@ Never stores a plaintext password or accepts an unknown SSH host key.
 from __future__ import annotations
 
 import json
+import base64
+import os
 import pathlib
 import re
 import socket
 import subprocess
 import threading
+import urllib.request
 import tkinter as tk
 import winreg
 from tkinter import messagebox, ttk
@@ -22,6 +25,10 @@ import portable_manager as manager
 
 HOST_DEFAULT = "10.11.99.1"
 KNOWN_HOSTS = pathlib.Path.home() / ".ssh" / "known_hosts"
+TIGHTVNC_URL = "https://www.tightvnc.com/download/2.8.90/tightvnc-2.8.90-gpl-setup-64bit.msi"
+TIGHTVNC_SIZE = 2543616
+TIGHTVNC_SHA256 = "9693cb4cdc2e7e482e8e3f5890415b57ef87de3369fa5c337db516218a1170ce"
+TIGHTVNC_PRODUCT_CODE = "{AFF73242-938E-4D86-B133-6A287F7E4A04}"
 
 
 def credential_target(host: str) -> str:
@@ -54,7 +61,7 @@ def tightvnc_exe() -> pathlib.Path:
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\tvnserver") as key:
             command = winreg.QueryValueEx(key, "ImagePath")[0]
     except OSError as exc:
-        raise RuntimeError("没有安装 TightVNC Server 服务；请先安装官方 Server 2.8.89") from exc
+        raise RuntimeError("没有安装 TightVNC Server 服务") from exc
     command = winreg.ExpandEnvironmentStrings(command).strip()
     match = re.match(r'^"([^"]+\.exe)"', command, re.I) or re.match(r'^(.+?\.exe)(?:\s|$)', command, re.I)
     if not match:
@@ -65,23 +72,269 @@ def tightvnc_exe() -> pathlib.Path:
     details = win32api.GetFileVersionInfo(str(path), "\\")
     ms, ls = details["FileVersionMS"], details["FileVersionLS"]
     version = (ms >> 16, ms & 0xFFFF, ls >> 16)
-    if version != (2, 8, 89):
-        raise RuntimeError(f"仅验证过 TightVNC Server 2.8.89；当前文件版本 {version}")
+    if version not in ((2, 8, 89), (2, 8, 90)):
+        raise RuntimeError(f"仅支持 TightVNC Server 2.8.89/2.8.90；当前文件版本 {version}")
     return path
 
 
+def tightvnc_settings() -> dict[str, int]:
+    names = ("RfbPort", "AcceptRfbConnections", "AcceptHttpConnections",
+             "AllowLoopback", "LoopbackOnly", "UseVncAuthentication")
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\TightVNC\Server", 0,
+                            winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+            return {name: int(winreg.QueryValueEx(key, name)[0]) for name in names}
+    except OSError as exc:
+        raise RuntimeError("未找到完整的 TightVNC 服务安全配置；不会继续开放 VNC") from exc
+
+
+def validate_tightvnc_settings(settings: dict[str, int]) -> None:
+    expected = {"RfbPort": 5900, "AcceptRfbConnections": 1, "AcceptHttpConnections": 0,
+                "AllowLoopback": 1, "LoopbackOnly": 1, "UseVncAuthentication": 0}
+    wrong = [f"{name}={settings.get(name, '未设置')}（要求 {value}）"
+             for name, value in expected.items() if settings.get(name) != value]
+    if wrong:
+        raise RuntimeError("TightVNC 当前设置不符合本项目的本机隧道要求：" + "; ".join(wrong) +
+                           "。为避免覆盖已有设置，请先在 TightVNC 配置中调整")
+
+
+def _ps_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _powershell(script: str, timeout: int = 30) -> subprocess.CompletedProcess:
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    env = os.environ.copy()
+    env["PSModulePath"] = (r"C:\Windows\System32\WindowsPowerShell\v1.0\Modules;"
+                           r"C:\Program Files\WindowsPowerShell\Modules")
+    return subprocess.run(["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+                           "-EncodedCommand", encoded], env=env,
+                          capture_output=True, text=True, timeout=timeout)
+
+
+def download_tightvnc(progress) -> pathlib.Path:
+    path = manager.CACHE / pathlib.PurePosixPath(TIGHTVNC_URL).name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        if path.stat().st_size != TIGHTVNC_SIZE or manager.file_sha(path) != TIGHTVNC_SHA256:
+            raise RuntimeError(f"已有 {path.name} 校验不符；保留文件供检查")
+    else:
+        part = path.with_name(path.name + ".part")
+        if part.exists():
+            raise RuntimeError(f"存在未完成的 TightVNC 下载：{part}；请先检查")
+        progress("正在从 TightVNC 官方站点下载已签名的 Server 安装包…")
+        try:
+            request = urllib.request.Request(TIGHTVNC_URL, headers={"User-Agent": "RMPP-ScreenBridge/0.1"})
+            with urllib.request.urlopen(request, timeout=45) as response, part.open("xb") as out:
+                while chunk := response.read(1024 * 1024):
+                    out.write(chunk)
+            if part.stat().st_size != TIGHTVNC_SIZE or manager.file_sha(part) != TIGHTVNC_SHA256:
+                raise RuntimeError("TightVNC MSI 大小或 SHA256 校验失败")
+            part.replace(path)
+            manager.log("download_verified", name="tightvnc", sha256=TIGHTVNC_SHA256,
+                        size=TIGHTVNC_SIZE, url=TIGHTVNC_URL)
+        except Exception:
+            part.unlink(missing_ok=True)
+            raise
+
+    signature_check = (
+        f"Import-Module Microsoft.PowerShell.Security -ErrorAction Stop; "
+        f"$s=Get-AuthenticodeSignature -LiteralPath {_ps_quote(str(path))}; "
+        "if ($s.Status -ne 'Valid' -or $s.SignerCertificate.Subject -notmatch 'CN=OOO GlavSoft') { exit 41 }"
+    )
+    result = _powershell(signature_check)
+    if result.returncode != 0:
+        raise RuntimeError("TightVNC 安装包的 Authenticode 签名无效或签名者不符")
+    return path
+
+
+def install_tightvnc(msi: pathlib.Path, progress) -> None:
+    log_path = manager.PROJECT / "logs" / "tightvnc-install.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    arguments = (
+        f'/i "{msi}" /qn /norestart /l*v "{log_path}" '
+        'ADDLOCAL=Server SERVER_REGISTER_AS_SERVICE=1 SERVER_ADD_FIREWALL_EXCEPTION=0 '
+        'SET_RFBPORT=1 VALUE_OF_RFBPORT=5900 '
+        'SET_ACCEPTHTTPCONNECTIONS=1 VALUE_OF_ACCEPTHTTPCONNECTIONS=0 '
+        'SET_ALLOWLOOPBACK=1 VALUE_OF_ALLOWLOOPBACK=1 '
+        'SET_LOOPBACKONLY=1 VALUE_OF_LOOPBACKONLY=1 '
+        'SET_USEVNCAUTHENTICATION=1 VALUE_OF_USEVNCAUTHENTICATION=0'
+    )
+    script = (f"$p=Start-Process -FilePath 'msiexec.exe' -ArgumentList {_ps_quote(arguments)} "
+              "-Verb RunAs -Wait -PassThru; exit $p.ExitCode")
+    progress("Windows 将弹出 UAC 确认；只安装 TightVNC Server，关闭防火墙例外、Web 访问和 VNC 密码认证，并限制为 loopback 连接…")
+    result = _powershell(script, timeout=600)
+    manager.log("tightvnc_msi_exit", exit_code=result.returncode)
+    if result.returncode != 0:
+        raise RuntimeError(f"TightVNC 安装未完成（退出码 {result.returncode}）；设备端 XOVI 尚未启动")
+
+
+def tightvnc_service_state() -> tuple[str, int]:
+    script = ("$s=Get-CimInstance Win32_Service -Filter \"Name='tvnserver'\"; "
+              "if(-not $s){exit 2}; Write-Output ($s.State + ':' + $s.ProcessId)")
+    result = _powershell(script)
+    if result.returncode != 0:
+        return "Absent", 0
+    state, pid = result.stdout.strip().split(":", 1)
+    return state, int(pid)
+
+
+def tightvnc_product() -> dict:
+    script = r"""
+$keys=@('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
+$items=Get-ItemProperty $keys -ErrorAction SilentlyContinue |
+  Where-Object { $_.DisplayName -match '^TightVNC( Server)?$' -and $_.DisplayVersion -like '2.8.90*' }
+if(@($items).Count -ne 1){exit 3}
+$item=@($items)[0]
+@{ProductCode=(Split-Path $item.PSPath -Leaf);DisplayName=$item.DisplayName;Version=$item.DisplayVersion} |
+  ConvertTo-Json -Compress
+"""
+    result = _powershell(script)
+    if result.returncode != 0:
+        raise RuntimeError("无法唯一核对 TightVNC 2.8.90 的 Windows 安装记录")
+    return json.loads(result.stdout.strip())
+
+
+def record_tightvnc_install(exe: pathlib.Path) -> pathlib.Path:
+    product = tightvnc_product()
+    if not re.fullmatch(r"\{?[0-9a-fA-F-]{36}\}?", product.get("ProductCode", "")):
+        raise RuntimeError("TightVNC 安装记录没有有效产品代码；无法建立安全卸载收据")
+    if product["ProductCode"].upper() != TIGHTVNC_PRODUCT_CODE:
+        raise RuntimeError("TightVNC 产品代码与本项目校验过的官方 MSI 不符；停止并保留已安装程序")
+    receipt = {
+        "format": 1,
+        "owner": "RMPP-ScreenBridge",
+        "product_code": product["ProductCode"],
+        "display_name": product["DisplayName"],
+        "version": product["Version"],
+        "service_exe": str(exe.resolve()),
+        "service_exe_sha256": manager.file_sha(exe),
+        "msi_sha256": TIGHTVNC_SHA256,
+    }
+    path = manager.PROJECT / "config" / "tightvnc-install-receipt.json"
+    if path.exists():
+        existing = json.loads(path.read_text(encoding="utf-8"))
+        if existing != receipt:
+            raise RuntimeError("已有 TightVNC 安装收据与当前安装不符；保留现状，不覆盖")
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    manager.log("tightvnc_install_receipt_created", product_code=product["ProductCode"],
+                version=product["Version"], service_exe_sha256=receipt["service_exe_sha256"])
+    return path
+
+
+def start_tightvnc_service() -> None:
+    result = _powershell("$p=Start-Process -FilePath 'sc.exe' -ArgumentList 'start tvnserver' "
+                         "-Verb RunAs -Wait -PassThru; exit $p.ExitCode", timeout=90)
+    if result.returncode != 0:
+        raise RuntimeError("TightVNC 服务未能启动；未启动 XOVI")
+
+
+def set_tightvnc_capture(exe: pathlib.Path, rect: str) -> None:
+    argument_list = f'-controlservice -sharerect "{rect}"'
+    script = (f"$p=Start-Process -FilePath {_ps_quote(str(exe))} "
+              f"-ArgumentList {_ps_quote(argument_list)} -Verb RunAs -Wait -PassThru; exit $p.ExitCode")
+    result = _powershell(script, timeout=45)
+    manager.log("tightvnc_capture_requested", rect=rect, exit_code=result.returncode)
+    if result.returncode != 0:
+        raise RuntimeError("Windows UAC 未批准或 TightVNC 捕获区域命令失败；RMPP XOVI 尚未启动")
+
+
+def ensure_tightvnc(ask, progress) -> pathlib.Path:
+    try:
+        exe = tightvnc_exe()
+        validate_tightvnc_settings(tightvnc_settings())
+    except RuntimeError as exc:
+        if "没有安装 TightVNC Server 服务" not in str(exc):
+            raise
+        # Do not install over a stray application-mode server or an unknown listener.
+        probe = _powershell("$p=Get-NetTCPConnection -LocalPort 5900 -State Listen -ErrorAction SilentlyContinue; "
+                            "if($p){exit 2}; exit 0")
+        if probe.returncode != 0:
+            raise RuntimeError("5900 端口已有未识别监听；为避免覆盖其他 VNC 实例，停止安装")
+        installed = _powershell("$p=Get-ItemProperty @('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',"
+                                 "'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*') "
+                                 "-ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -match '^TightVNC'}; "
+                                 "if($p){exit 2}; exit 0")
+        if installed.returncode != 0:
+            raise RuntimeError("检测到已有 TightVNC 安装记录但没有可核验服务；为避免覆盖用户安装，停止自动安装")
+        msi = download_tightvnc(progress)
+        if not ask("安装 TightVNC Server", "将通过 Windows UAC 安装 TightVNC 2.8.90 Server-only。设置仅接受本机 loopback、关闭 VNC 密码认证和 Web 访问、不添加防火墙例外；不会修改 RMPP。继续吗？"):
+            raise RuntimeError("你取消了 TightVNC 安装；RMPP XOVI 尚未启动")
+        install_tightvnc(msi, progress)
+        exe = tightvnc_exe()
+        receipt = record_tightvnc_install(exe)
+        progress(f"TightVNC 已按项目配置安装；本机卸载收据：{receipt}")
+        validate_tightvnc_settings(tightvnc_settings())
+
+    state, pid = tightvnc_service_state()
+    if state != "Running":
+        if not ask("启动 TightVNC Server", "TightVNC 服务已安装并通过本机访问配置检查。现在启动服务以继续投屏吗？"):
+            raise RuntimeError("你取消了 TightVNC 服务启动；RMPP XOVI 尚未启动")
+        start_tightvnc_service()
+        state, pid = tightvnc_service_state()
+    if state != "Running" or pid <= 0:
+        raise RuntimeError("TightVNC Server 服务仍未运行；RMPP XOVI 尚未启动")
+    return exe
+
+
+def uninstall_tightvnc_if_owned(progress=lambda text: None) -> str:
+    path = manager.PROJECT / "config" / "tightvnc-install-receipt.json"
+    if not path.is_file():
+        return "没有本项目 TightVNC 安装收据；未卸载任何 TightVNC。"
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        if receipt.get("format") != 1 or receipt.get("owner") != "RMPP-ScreenBridge":
+            raise RuntimeError("收据格式或归属不匹配")
+        exe = pathlib.Path(receipt["service_exe"])
+        if not exe.is_file() or manager.file_sha(exe) != receipt.get("service_exe_sha256"):
+            raise RuntimeError("服务文件路径或 SHA256 与安装收据不符")
+        product = tightvnc_product()
+        if (product.get("ProductCode") != receipt.get("product_code")
+                or product.get("Version") != receipt.get("version")):
+            raise RuntimeError("Windows 安装产品与收据不符")
+        service_exe = tightvnc_exe()
+        if service_exe.resolve() != exe.resolve():
+            raise RuntimeError("当前 TightVNC 服务路径与安装收据不符")
+    except Exception as exc:
+        return f"TightVNC 保留：无法证明它由本项目安装（{exc}）。"
+    progress("将通过 Windows UAC 卸载收据匹配的本项目 TightVNC 2.8.90；这会停止它的 VNC 服务并断开投屏。")
+    code = receipt["product_code"]
+    script = (f"$p=Start-Process -FilePath 'msiexec.exe' -ArgumentList "
+              f"{_ps_quote('/x ' + code + ' /qn /norestart')} -Verb RunAs -Wait -PassThru; exit $p.ExitCode")
+    result = _powershell(script, timeout=600)
+    if result.returncode != 0:
+        return f"TightVNC 卸载未完成（退出码 {result.returncode}）；收据和文件保留。"
+    state, _pid = tightvnc_service_state()
+    if state != "Absent":
+        return "TightVNC MSI 已运行，但服务仍存在；保留收据供检查。"
+    path.unlink()
+    return "已按匹配的本项目收据卸载 TightVNC 2.8.90。"
+
+
 def vnc_loopback() -> None:
+    validate_tightvnc_settings(tightvnc_settings())
     query = ("$p=@(Get-NetTCPConnection -LocalPort 5900 -State Listen -ErrorAction SilentlyContinue | "
-             "Select-Object LocalAddress,OwningProcess); $p | ConvertTo-Json -Compress")
-    out = subprocess.run(["powershell.exe", "-NoProfile", "-Command", query],
-                         capture_output=True, text=True, timeout=15, check=True).stdout.strip()
-    rows = json.loads(out) if out else []
+             "Select-Object LocalAddress,OwningProcess); "
+             "$s=Get-CimInstance Win32_Service -Filter \"Name='tvnserver'\"; "
+             "@{Listeners=$p;ServicePid=[int]$s.ProcessId;State=$s.State} | ConvertTo-Json -Compress -Depth 4")
+    result = _powershell(query, timeout=15)
+    if result.returncode != 0:
+        raise RuntimeError("无法读取 TightVNC 监听状态")
+    out = result.stdout.strip()
+    state = json.loads(out) if out else {}
+    rows = state.get("Listeners") or []
     if isinstance(rows, dict):
         rows = [rows]
-    if not rows or "127.0.0.1" not in {row["LocalAddress"] for row in rows}:
-        raise RuntimeError("TightVNC 尚未监听 Windows 127.0.0.1:5900")
-    if any(row["LocalAddress"] not in ("127.0.0.1", "::1") for row in rows):
-        raise RuntimeError("TCP 5900 对非本机网卡开放；请先关闭额外实例或限制监听")
+    if state.get("State") != "Running" or not rows:
+        raise RuntimeError("TightVNC 服务没有在 Windows 5900 端口监听")
+    if any(int(row["OwningProcess"]) != int(state.get("ServicePid", -1)) for row in rows):
+        raise RuntimeError("Windows 5900 监听者不是已核验的 TightVNC 服务；拒绝复用")
+    allowed = {"127.0.0.1", "::1", "0.0.0.0", "::"}
+    if any(row["LocalAddress"] not in allowed for row in rows):
+        raise RuntimeError("TightVNC 监听地址异常；拒绝继续")
 
 
 def read_exact(sock: socket.socket, size: int) -> bytes:
@@ -195,7 +448,7 @@ class App:
             (0, "检测设备", self.check),
             (1, "一键安装离线文件", self.install),
             (2, "生成/核对设备 hashtab", self.complete),
-            (3, "连接并开始投屏", self.start),
+            (3, "一键准备并开始投屏", self.start),
             (4, "恢复 stock 界面", self.restore),
             (5, "卸载本程序安装的文件", self.uninstall),
             (6, "备份当前 RMPP 到临时备份", self.backup_device),
@@ -377,11 +630,27 @@ class App:
             x, y, w, h = self.capture()
             client = self.connect()
             active = manager.owned_active(client)
-            receipt = manager.read_receipt(client) if active else manager.complete_hashtab(client, progress=self.show)
+            if active:
+                receipt = manager.read_receipt(client)
+            else:
+                state = manager.preflight(client)
+                if state["xovi"] == "absent" and state["meta"] == "absent":
+                    if not self.ask("安装 RMPP 组件", "尚未安装 ScreenBridge 管理的 XOVI/AppLoad/VNSee。继续后会下载官方文件、先备份 RMPP 笔记与 rmtool 状态，再通过 USB SSH 离线安装；不会立即启动 XOVI。继续吗？"):
+                        return
+                    manager.install(client, self.show)
+                    state = manager.preflight(client)
+                if state["xovi"] != "present" or state["meta"] != "present":
+                    raise RuntimeError("RMPP 组件状态不完整；未覆盖文件，停止一键流程")
+                receipt = manager.read_receipt(client)
+                if not receipt.get("hashtab_sha256"):
+                    if not self.ask("生成设备 hashtab", "新设备需要为当前固件生成一次 hashtab。请先保存未同步笔记；操作前会备份笔记、配置和 rmtool，然后运行 XOVI 官方工具并恢复 stock 界面。继续吗？"):
+                        return
+                    manager.generate_hashtab(client, self.show)
+                    receipt = manager.complete_hashtab(client, progress=self.show)
             manager.verify_tree(client, receipt)
+            exe = ensure_tightvnc(self.ask, self.show)
             vnc_loopback()
-            exe = tightvnc_exe()
-            subprocess.run([str(exe), "-controlservice", "-sharerect", f"{w}x{h}+{x}+{y}"], timeout=15, check=False)
+            set_tightvnc_capture(exe, f"{w}x{h}+{x}+{y}")
             if rfb_size() != (w, h):
                 raise RuntimeError("TightVNC 实际 framebuffer 尺寸未变为 1620×720")
             self.ensure_forward(client)

@@ -33,7 +33,7 @@ The executable contains the Python runtime and the listed modules. Each retains 
 
 | Project | Use | License | Included? |
 | --- | --- | --- | --- |
-| [TightVNC 2](https://www.tightvnc.com/licensing.php) | Windows VNC server used by the user | GPL-2.0 | No installer or executable |
+| [TightVNC 2](https://www.tightvnc.com/licensing.php) | Windows VNC server; official x64 MSI 2.8.90 is downloaded by the wizard when no supported service is installed | GPL-2.0 | Not bundled; fetched from the official site, SHA256-pinned, Authenticode-checked, and installed server-only |
 | [asivery/qmldiff](https://github.com/asivery/qmldiff) | Used to validate the QMD during development | GPL-3.0 | No |
 
 The QMD and Windows installer are integration work; no copy of AppLoad's QML resource is included. This project is not endorsed by reMarkable or upstream maintainers. Preserve all upstream notices when redistributing or modifying upstream software.
