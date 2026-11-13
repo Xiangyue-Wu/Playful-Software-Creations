@@ -1,29 +1,34 @@
-# RMPP ScreenBridge（实验版）
+# RMPP ScreenBridge
 
-[English](README.md) · [上游项目和许可](THIRD_PARTY.md)
+RMPP ScreenBridge 让 reMarkable Paper Pro 通过 VNSee 显示并操作 Windows 桌面的一块区域。Windows 向导负责检测设备、准备所需软件、启动投屏，并提供独立卸载器。
 
-Windows 向导从官方地址下载 XOVI v19、AppLoad 0.6.0、Vellum 的 asivery VNSee 1.1.1-r0，核对固定大小与 SHA-256，并独立验证 VNSee APK 的 RSA 签名和 payload 哈希。下载都在 Windows 完成，RMPP 仅通过 USB SSH 接收离线文件。安装收据记录每个文件的哈希，卸载时逐一复核。
+**实现方式：** 向导在 Windows 下载并验证所需软件包，再通过 USB SSH 传到 RMPP；VNSee 通过 SSH 反向隧道，从 TightVNC 获取 Windows 画面。TightVNC 只监听 Windows 本机 `127.0.0.1`，VNC 端口不会开放给局域网或互联网。设备变更前，向导会在电脑本地创建备份；卸载时则依据安装收据和文件哈希核对项目文件。
 
-**适用范围：** reMarkable Paper Pro、AArch64、固件 **3.29.0.153**。其他固件会被拒绝。源码包不含 VNSee、XOVI、AppLoad、TightVNC 的二进制，也不含笔记、密钥、密码或设备 hashtab。
+本项目镜像的是现有 Windows 显示器区域，**不会创建 Windows 虚拟显示器或扩展屏幕**。
 
-## 准备条件
+## 快速开始
 
-- Windows 11 已安装 Python 3.10+。双击 [`启动安装器.cmd`](启动安装器.cmd) 会在项目内建立 `.venv`，仅在 Windows 下载 Python 依赖。
-- TightVNC Server 2.8.89 已作为服务安装，5900 **只监听 127.0.0.1**，提供 RFB 无密码类型 1。加密和外部访问边界由 USB SSH 隧道提供；若监听了其他网卡，向导会拒绝投屏。
-- 已开启 RMPP USB SSH。首次连接时向导会记录设备主机密钥到 Windows `~/.ssh/known_hosts`；之后密钥变化会拒绝连接。
-- RMPP 的 stock xochitl 正常运行，`/home/root/xovi` 不存在。若存在 rmtool，其 XOVI 必须已停用；向导不会更改 rmtool 状态。
-- 已实测的 VNC framebuffer 是 **1620×720**。QMD 仅在 VNSee asivery Test 横屏最大化窗口显示左侧 960×720；其他尺寸未开放。
+1. 将本目录下载或克隆到 Windows 11 的可写位置。
+2. 安装 Python 3.10 或更高版本、TightVNC Server 2.8.89。将 TightVNC 配置为只监听 `127.0.0.1:5900`，并使用向导要求的 VNC 安全模式。
+3. 在 RMPP 启用 USB SSH，并通过 USB 连接电脑。
+4. 运行 [`启动安装器.cmd`](启动安装器.cmd)。项目会创建独立 Python 虚拟环境，并安装固定版本的 Python 依赖。
+5. 在向导中填写 USB SSH 连接信息，点击“检测设备”，再按提示安装和启动。任何会重启 `xochitl` 的操作前，请先保存未同步的笔记。
+6. 在 AppLoad 中打开 **VNSee asivery Test**。卸载设备端组件前，先正常退出 VNSee，再运行独立的 [`卸载RMPP-ScreenBridge.cmd`](卸载RMPP-ScreenBridge.cmd)。
 
-## 操作
+已验证配置使用 `1620×720` 的 VNC framebuffer；VNSee 专用布局会在横屏最大化窗口中显示左侧 `960×720` 区域。当前配置不开放其他固件版本或 framebuffer 尺寸。
 
-1. 双击“启动安装器.cmd”，输入 RMPP USB IP 和 root SSH 密码。可选用 Windows 凭据管理器保存密码。
-2. 点击“检测设备”，再点击“一键安装离线文件”。保存未同步笔记后，确认在**本机 RMPP**生成 hashtab；设备可能要求输入设备密码。若此时取消，文件保留但不能启动 XOVI，可稍后点击“生成/核对设备 hashtab”。不会接受手工复制的其他设备 hashtab。
-3. 点击“连接并开始投屏”，保存笔记后确认临时重启 xochitl。保持 Windows 向导打开，在 RMPP AppLoad 中选择“VNSee asivery Test”。
-4. 从 AppLoad 正常退出 VNSee；需要卸载时双击独立的 [`卸载RMPP-ScreenBridge.cmd`](卸载RMPP-ScreenBridge.cmd)。
+## 安全与限制
 
-这个方案复制 Windows 现有屏幕的一块区域，**不是虚拟扩展屏**。每次安装、生成设备 hashtab、启动/恢复 XOVI 或卸载前，都会先把笔记数据库、用户配置、本项目 XOVI/AppLoad/VNSee 文件、rmtool 和 xochitl 启动配置备份到 `临时备份\RMPP`；备份完成并校验后，前端会显示完整路径和 SHA256，备份失败则取消后续风险操作。备份不含系统分区镜像、SSH 私钥或尚未保存到磁盘的笔记编辑；重启 xochitl 前仍需先保存笔记。备份包含个人笔记，目录被 Git 忽略，严禁手动上传或公开分享。项目不修改持久 systemd、rmtool、笔记或 Windows 显示布局。
+- 支持范围：reMarkable Paper Pro、AArch64、固件 `3.29.0.153`。向导会拒绝其他固件和无法识别的 XOVI/运行时状态。
+- 本仓库不包含 XOVI、AppLoad、VNSee 或 TightVNC 二进制。向导在 Windows 下载并验证官方软件包，再通过 USB SSH 传给 RMPP；设备端不联网下载。
+- SSH 主机密钥会校验并记录到当前 Windows 用户的 `known_hosts`。可选 SSH 密码由 Windows 凭据管理器保存，不以明文写入项目。不要分享凭据或设备备份。
+- 设备变更前，向导会把限定范围的备份保存到 `临时备份/RMPP`，并显示路径和 SHA-256。备份可能含私人笔记和文档，目录已加入 Git 忽略规则，切勿上传或公开分享。重启 `xochitl` 前请保存笔记；尚未写入磁盘的编辑内容不会包含在备份中。
+- 设备端卸载会核对安装收据和文件哈希。如果设备无法连接、VNSee 仍运行或文件与收据不符，卸载器会停止，避免删除无法确认的文件。设备或 USB SSH 不可用时，无法保证远程卸载。
+- 项目不会修改持久 systemd 配置、rmtool 状态、Windows 显示器拓扑，也不会放宽 TightVNC 的 loopback 监听边界。
+- 本项目面向上述配置的受控测试，不是适配所有设备的通用无人值守安装器。参见[恢复说明](docs/RECOVERY.md)和[发布检查](PUBLICATION_REVIEW.md)。
 
-独立卸载器提供“卸载 RMPP + 清理 Windows 项目缓存”和“只清理 Windows 文件”两种操作。设备端只有在 USB SSH 可连接且本项目安装收据、文件哈希和 stock 状态均通过核对后才会删除；若设备离线、VNSee 尚在运行或文件被改动，卸载器会停止设备端删除并说明原因，可修复连接后重试。Windows 端只删除能按固定哈希/收据确认的本项目下载、安装包、日志和专用密码；默认安排在卸载器退出后删除项目 `.venv`，也可取消勾选。源码、卸载器、共享 SSH `known_hosts`、用户笔记备份、rmtool 和未知文件会保留。断电、系统损坏或 SSH 不可用时，无法远程保证设备端卸载；恢复路径见[说明](docs/RECOVERY.md)。
+## 许可与上游项目
 
-**新便携向导尚未在全新设备上完成安装、使用、卸载闭环测试。** 在完成该验证前，它属于实验版，不能宣称兼容所有固件。参见[发布前检查](PUBLICATION_REVIEW.md)。集成源码 GPL-3.0-only，上游许可见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+集成代码采用 GPL-3.0-only，见 [LICENSE](LICENSE)。VNSee、AppLoad、XOVI、Vellum 软件包和 TightVNC 保留各自的许可和作者信息，见[上游项目说明](THIRD_PARTY.md)。本项目未获 reMarkable 或上游维护者背书。
 
+[English](README.md)

@@ -1,36 +1,34 @@
-# RMPP ScreenBridge (experimental)
+# RMPP ScreenBridge
 
-[简体中文](README.zh-CN.md) · [Upstream credits](THIRD_PARTY.md)
+RMPP ScreenBridge lets a reMarkable Paper Pro show and interact with a selected region of an existing Windows desktop using VNSee. A Windows wizard checks the device, prepares the required software, starts the stream, and provides a separate uninstaller.
 
-This Windows wizard downloads XOVI v19, AppLoad 0.6.0 and Vellum's asivery VNSee 1.1.1-r0 to Windows, verifies pinned size and SHA-256, checks the VNSee APK RSA signature and payload hash, and uploads a self-contained bundle through USB SSH. It records every installed file hash for guarded removal.
+**How it works:** the wizard downloads and verifies the required packages on Windows, then transfers them to the tablet over USB SSH. VNSee receives the Windows image from TightVNC through a reverse SSH tunnel. TightVNC remains bound to Windows loopback; VNC is not exposed to the LAN or Internet. Before device-changing operations, the wizard creates a local backup and checks the project install receipt before removal.
 
-**Supported profile:** reMarkable Paper Pro, AArch64, firmware **3.29.0.153**. Other firmware versions are rejected. The original VNSee binary, XOVI, AppLoad and TightVNC are upstream software and are not bundled here.
+This mirrors part of an existing Windows display; it does **not** create a Windows virtual or extended display.
 
-## Prerequisites
+## Quick start
 
-- Windows 11 with Python 3.10+ already installed. `启动安装器.cmd` creates a local `.venv` and installs pinned Python dependencies on Windows.
-- TightVNC Server 2.8.89 installed as a service, listening **only on 127.0.0.1:5900**, with RFB security type 1 available. The wizard refuses any non-loopback listener.
-- RMPP USB SSH enabled and root password available. On first USB connection, the wizard records the host key in Windows `~/.ssh/known_hosts`; later changes are rejected.
-- Stock xochitl running, `/home/root/xovi` absent. If rmtool is installed, its XOVI must already be disabled; this wizard never changes rmtool's state.
-- The tested VNC framebuffer is **1620×720**. A VNSee-only QMD displays its left 960×720 region in a maximized landscape window. Other frame sizes are not enabled.
+1. Download or clone this folder to a writable location on Windows 11.
+2. Install Python 3.10 or later and TightVNC Server 2.8.89. Configure TightVNC to listen only on `127.0.0.1:5900` and provide the VNC security mode required by the wizard.
+3. Enable USB SSH on the RMPP and connect it to the PC.
+4. Run [`启动安装器.cmd`](启动安装器.cmd). The project creates its own Python virtual environment and installs the pinned Python dependencies.
+5. In the wizard, enter the USB SSH connection details, click **检测设备**, then follow the install and start prompts. Save unsynced notes before approving any operation that restarts `xochitl`.
+6. Open **VNSee asivery Test** from AppLoad. To remove the device components, exit VNSee normally and run [`卸载RMPP-ScreenBridge.cmd`](卸载RMPP-ScreenBridge.cmd).
 
-## Use
+The tested setup uses a `1620×720` VNC framebuffer. Its VNSee-specific layout shows the left `960×720` region in a maximized landscape window. Other firmware versions and framebuffer sizes are not enabled by this profile.
 
-1. Extract this source tree to a writable folder and double-click [`启动安装器.cmd`](启动安装器.cmd).
-2. Enter the RMPP USB IP and SSH password. Optional password storage uses Windows Credential Manager.
-3. Click **检测设备**, then **一键安装离线文件**. The files are placed only under `/home/root/xovi`, plus a dedicated receipt directory. Save unsynced notes before approving the one-time XOVI hashtab generation; the tablet may ask for its device password.
-4. Click **连接并开始投屏**. Save notes before approving a temporary xochitl restart. Keep the wizard open, then select **VNSee asivery Test** in AppLoad.
-5. Exit VNSee normally, click **恢复 stock 界面**, then run the separate [`卸载RMPP-ScreenBridge.cmd`](卸载RMPP-ScreenBridge.cmd) when needed.
+## Safety and limitations
 
-The hashtab is generated **on the target device** by the pinned XOVI tool. Its creation temporarily interrupts xochitl. If declined or interrupted, the files stay installed but activation is blocked. Use **生成/核对设备 hashtab** to retry; a hashtab copied manually from another tablet is not accepted.
+- Supported profile: reMarkable Paper Pro, AArch64, firmware `3.29.0.153`. The wizard rejects other firmware versions and unknown XOVI/runtime states.
+- XOVI, AppLoad, VNSee, and TightVNC binaries are not included in this repository. Official packages are downloaded and verified on Windows; the RMPP receives files over USB SSH and does not download them.
+- SSH host keys are checked and saved in the Windows user's `known_hosts`. An optional SSH password is stored with Windows Credential Manager, not as plaintext in the project. Do not share credentials or device backups.
+- Before device changes, the wizard saves a scoped backup under `临时备份/RMPP` and displays its path and SHA-256. Backups may contain private notes and documents; they are Git-ignored and must not be published. Save notes before restarting `xochitl`; unsaved in-memory edits are not part of the backup.
+- Device removal is receipt- and hash-checked. If the tablet is unreachable, VNSee is running, or installed files differ from the receipt, the uninstaller stops rather than deleting uncertain files. Remote removal cannot be guaranteed if the tablet or USB SSH is unavailable.
+- The project does not change persistent systemd settings, rmtool state, Windows display topology, or TightVNC's loopback-only boundary.
+- This is a controlled-testing tool for the profile above, not a universal or unattended installer. See [recovery notes](docs/RECOVERY.md) and [publication review](PUBLICATION_REVIEW.md).
 
-This mirrors a region of an existing Windows display through TightVNC loopback → USB SSH reverse tunnel → RMPP VNSee/QTFB. It does **not** create a Windows virtual display. It does not modify persistent systemd settings, rmtool, notes or Windows display topology.
+## License and upstream projects
 
-Before installation, device-specific hashtab generation, XOVI activation/restoration, or uninstall, the wizard streams a read-only snapshot of the notebook database, user config, this project's XOVI/AppLoad/VNSee files, rmtool, and the xochitl unit/drop-ins to `临时备份/RMPP`. It displays the completed path and SHA256; if backup fails, the risky action is cancelled. The snapshot excludes OS partitions, SSH private keys, and unsaved in-memory note edits, so save notes before xochitl restarts. Backups contain private documents, are Git-ignored, and must not be uploaded or shared.
+The integration code is GPL-3.0-only; see [LICENSE](LICENSE). VNSee, AppLoad, XOVI, Vellum packages, and TightVNC retain their respective licenses and authorship. See [upstream credits](THIRD_PARTY.md). This project is not endorsed by reMarkable or the upstream maintainers.
 
-The standalone uninstaller offers **RMPP uninstall + selected Windows cache cleanup** and **Windows-only cleanup**. Device files are removed only when USB SSH works and the project receipt, every file/symlink hash, and stock state match. If the device is offline, VNSee is still running, or files changed, device removal stops and can be retried after recovery. Windows cleanup removes only project downloads, the verified install bundle, project logs, and dedicated credentials; `.venv` removal is enabled by default and happens after the UI exits, but can be unchecked. Source, uninstaller, shared SSH `known_hosts`, user notes, rmtool, and unknown files are kept. Remote device removal cannot be guaranteed while the tablet is unreachable or damaged. See [recovery](docs/RECOVERY.md).
-
-The new portable wizard has **not yet completed a fresh-device install/use/uninstall cycle**. Treat it as experimental until that verification passes. See [publication review](PUBLICATION_REVIEW.md) for remaining release work.
-
-Integration source is GPL-3.0-only; see [LICENSE](LICENSE). Upstream software retains its own license and authorship in [THIRD_PARTY.md](THIRD_PARTY.md).
-
+[简体中文](README.zh-CN.md)
