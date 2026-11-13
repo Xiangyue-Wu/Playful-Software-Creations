@@ -16,13 +16,18 @@ The release executable bundles CPython and the pinned Python runtime dependencie
 
 | Project | Version in release build | License | Project |
 | --- | --- | --- | --- |
-| [Paramiko](https://www.paramiko.org/) | 5.1.0 | LGPL-2.1-or-later | [Source](https://github.com/paramiko/paramiko) |
+| [Paramiko](https://www.paramiko.org/) | 5.1.0 | LGPL-2.1 | [Source](https://github.com/paramiko/paramiko) |
 | [pywin32](https://github.com/mhammond/pywin32) | 311 | PSF | [Source](https://github.com/mhammond/pywin32) |
 | [cryptography](https://cryptography.io/) | 44.0.1 | Apache-2.0 / BSD-3-Clause | [Source](https://github.com/pyca/cryptography) |
-| CPython | Build interpreter version recorded in `BUILD-INFO.txt` | PSF License | [Source and license](https://www.python.org/downloads/source/) |
+| [bcrypt](https://github.com/pyca/bcrypt/) | 5.0.0 | Apache-2.0 | Source |
+| [Invoke](https://www.pyinvoke.org/) | 3.0.3 | BSD-2-Clause | [Source](https://github.com/pyinvoke/invoke) |
+| [PyNaCl](https://pynacl.readthedocs.io/) | 1.6.2 | Apache-2.0 | [Source](https://github.com/pyca/pynacl) |
+| [cffi](https://cffi.readthedocs.io/) | 2.1.1 | MIT-0 | [Source](https://github.com/python-cffi/cffi) |
+| [pycparser](https://github.com/eliben/pycparser) | 3.12 | BSD-3-Clause | Source |
+| CPython | 3.13.2 | PSF License | [Source and license](https://www.python.org/downloads/source/) |
 | PyInstaller | 6.22.3 (build tool) | GPL-2.0-or-later with bootloader exception | [Source and license](https://github.com/pyinstaller/pyinstaller) |
 
-Paramiko's required transitive libraries (including bcrypt, cffi, invoke, PyNaCl, and pycparser) are collected into the executable. Each retains its own license and copyright. The exact build environment is recorded in the release build log.
+The executable contains the Python runtime and the listed modules. Each retains its own license and copyright; the exact package versions used are recorded in `BUILD-INFO.txt`.
 
 ## Other tools
 
