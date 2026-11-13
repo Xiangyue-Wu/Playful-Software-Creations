@@ -1,34 +1,25 @@
 # RMPP ScreenBridge
 
-RMPP ScreenBridge lets a reMarkable Paper Pro show and interact with a selected region of an existing Windows desktop using VNSee. A Windows wizard checks the device, prepares the required software, starts the stream, and provides a separate uninstaller.
+RMPP ScreenBridge mirrors a selected Windows desktop region to a reMarkable Paper Pro and lets you use the Windows screen from the tablet. The release ZIP contains a ready-to-run Windows wizard and a separate uninstaller; Python does not need to be installed.
 
-**How it works:** the wizard downloads and verifies the required packages on Windows, then transfers them to the tablet over USB SSH. VNSee receives the Windows image from TightVNC through a reverse SSH tunnel. TightVNC remains bound to Windows loopback; VNC is not exposed to the LAN or Internet. Before device-changing operations, the wizard creates a local backup and checks the project install receipt before removal.
+**How it works:** the wizard downloads and verifies the official XOVI, AppLoad, and VNSee packages on Windows, then transfers them to the RMPP over USB SSH. VNSee receives the Windows image from TightVNC through a reverse SSH tunnel. TightVNC stays on Windows loopback; the VNC port is not exposed to the LAN or Internet.
 
-This mirrors part of an existing Windows display; it does **not** create a Windows virtual or extended display.
+## Use the release ZIP
 
-## Quick start
+1. Download `RMPP-ScreenBridge-v0.1.0-win-x64.zip` from [Releases](https://github.com/Xiangyue-Wu/Playful-Software-Creations/releases) and extract it to a writable folder.
+2. Make sure Windows has TightVNC Server 2.8.89 configured to listen only on `127.0.0.1:5900` and offer VNC security type 1 (no VNC password). The wizard keeps access local and carries the stream through encrypted USB SSH. Connect the RMPP by USB and enable USB SSH.
+3. Double-click `启动安装器.cmd`. In the wizard, enter the device password and click **检测设备**, then follow the install and start prompts. The first run needs Internet access on Windows to fetch verified packages; the RMPP does not download software.
+4. Save unsynced notes before approving any prompt that creates the device hashtab or restarts `xochitl`. After activation, open **VNSee asivery Test** from AppLoad.
+5. To remove the device components, exit VNSee normally and double-click `卸载RMPP-ScreenBridge.cmd`.
 
-1. Download or clone this folder to a writable location on Windows 11.
-2. Install Python 3.10 or later and TightVNC Server 2.8.89. Configure TightVNC to listen only on `127.0.0.1:5900` and provide the VNC security mode required by the wizard.
-3. Enable USB SSH on the RMPP and connect it to the PC.
-4. Run [`启动安装器.cmd`](启动安装器.cmd). The project creates its own Python virtual environment and installs the pinned Python dependencies.
-5. In the wizard, enter the USB SSH connection details, click **检测设备**, then follow the install and start prompts. Save unsynced notes before approving any operation that restarts `xochitl`.
-6. Open **VNSee asivery Test** from AppLoad. To remove the device components, exit VNSee normally and run [`卸载RMPP-ScreenBridge.cmd`](卸载RMPP-ScreenBridge.cmd).
+## Supported setup and safety
 
-The tested setup uses a `1620×720` VNC framebuffer. Its VNSee-specific layout shows the left `960×720` region in a maximized landscape window. Other firmware versions and framebuffer sizes are not enabled by this profile.
+- Tested profile: reMarkable Paper Pro, AArch64, firmware `3.29.0.153`; VNC framebuffer `1620×720`. The VNSee layout displays the left `960×720` region in landscape. Other firmware and frame sizes are not enabled.
+- The project mirrors part of an existing Windows display; it does **not** create a virtual or extended Windows display.
+- Before device changes, the wizard creates a local backup under `临时备份/RMPP` and displays its path and SHA-256. Backups may contain private notes and documents; never publish or share them. Unsaved in-memory note edits are not included.
+- Device removal checks the project install receipt and file hashes. If the tablet is unavailable, VNSee is running, or files differ, removal stops rather than deleting uncertain files.
+- The project does not change persistent systemd settings, rmtool state, Windows display topology, or TightVNC's loopback-only boundary. It is intended for controlled testing, not as a universal installer.
 
-## Safety and limitations
+The release package includes the GPL-3.0-only integration license and upstream notices. See [LICENSE](LICENSE), [upstream credits](THIRD_PARTY.md), and [recovery notes](docs/RECOVERY.md). This project is not endorsed by reMarkable or the upstream maintainers.
 
-- Supported profile: reMarkable Paper Pro, AArch64, firmware `3.29.0.153`. The wizard rejects other firmware versions and unknown XOVI/runtime states.
-- XOVI, AppLoad, VNSee, and TightVNC binaries are not included in this repository. Official packages are downloaded and verified on Windows; the RMPP receives files over USB SSH and does not download them.
-- SSH host keys are checked and saved in the Windows user's `known_hosts`. An optional SSH password is stored with Windows Credential Manager, not as plaintext in the project. Do not share credentials or device backups.
-- Before device changes, the wizard saves a scoped backup under `临时备份/RMPP` and displays its path and SHA-256. Backups may contain private notes and documents; they are Git-ignored and must not be published. Save notes before restarting `xochitl`; unsaved in-memory edits are not part of the backup.
-- Device removal is receipt- and hash-checked. If the tablet is unreachable, VNSee is running, or installed files differ from the receipt, the uninstaller stops rather than deleting uncertain files. Remote removal cannot be guaranteed if the tablet or USB SSH is unavailable.
-- The project does not change persistent systemd settings, rmtool state, Windows display topology, or TightVNC's loopback-only boundary.
-- This is a controlled-testing tool for the profile above, not a universal or unattended installer. See [recovery notes](docs/RECOVERY.md) and [publication review](PUBLICATION_REVIEW.md).
-
-## License and upstream projects
-
-The integration code is GPL-3.0-only; see [LICENSE](LICENSE). VNSee, AppLoad, XOVI, Vellum packages, and TightVNC retain their respective licenses and authorship. See [upstream credits](THIRD_PARTY.md). This project is not endorsed by reMarkable or the upstream maintainers.
-
-[简体中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md) · [Source code](https://github.com/Xiangyue-Wu/Playful-Software-Creations/tree/main/RMPP-ScreenBridge)

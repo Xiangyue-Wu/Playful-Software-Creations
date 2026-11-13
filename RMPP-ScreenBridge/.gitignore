@@ -16,4 +16,8 @@ known_hosts
 __pycache__/
 *.pyc
 .venv/
+.release-build-venv/
+release-output/
+build-*/
+*.spec
 deploy/portable-bundles/

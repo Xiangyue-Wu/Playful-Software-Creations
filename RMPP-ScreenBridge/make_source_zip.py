@@ -9,11 +9,12 @@ DEST = (Path(sys.argv[1]).resolve() if len(sys.argv) > 1
         else ROOT.parent / "RMPP-ScreenBridge-Source-20261113.zip")
 FILES = (
     ".gitignore", "LICENSE", "README.md", "README.zh-CN.md",
-    "THIRD_PARTY.md", "PUBLICATION_REVIEW.md", "requirements.txt",
-    "setup.ps1", "启动安装器.cmd", "卸载RMPP-ScreenBridge.cmd", "make_source_zip.py", "docs/RECOVERY.md",
+    "THIRD_PARTY.md", "PUBLICATION_REVIEW.md", "requirements.txt", "requirements-release-build.txt",
+    "setup.ps1", "build-release.ps1", "启动安装器.cmd", "卸载RMPP-ScreenBridge.cmd", "make_source_zip.py", "docs/RECOVERY.md",
     "deploy/qmd-vnsee-layout/vnsee-asivery-clip-v7-landscape.qmd",
     "apps/VNSee-Launcher/portable_manager.py",
     "apps/VNSee-Launcher/portable_gui.py",
+    "apps/VNSee-Launcher/release_entry.py",
     "apps/VNSee-Launcher/uninstaller_gui.py",
     "apps/VNSee-Launcher/test_proxy.py",
     "apps/VNSee-Launcher/test_portable_manager.py",

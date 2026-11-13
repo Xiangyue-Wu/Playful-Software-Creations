@@ -13,6 +13,7 @@ import pathlib
 import re
 import shlex
 import shutil
+import sys
 import tarfile
 import time
 import urllib.request
@@ -22,7 +23,8 @@ import zlib
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
-PROJECT = pathlib.Path(__file__).resolve().parents[2]
+PROJECT = (pathlib.Path(sys.executable).resolve().parent if getattr(sys, "frozen", False)
+           else pathlib.Path(__file__).resolve().parents[2])
 CACHE = PROJECT / "downloads"
 LOG = PROJECT / "logs" / "portable-installer.jsonl"
 ROOT = "/home/root/xovi"
